@@ -66,7 +66,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
       <div className="w-full md:w-1/2 flex flex-col gap-6">
         
         {/* Header */}
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-0">
           <div>
             <Link href="/worker" className="text-secondary hover:text-primary font-mono text-xs uppercase flex items-center gap-1 mb-4">
               <span className="material-symbols-outlined text-[14px]">arrow_back</span>
@@ -135,7 +135,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Right Column: Live Terminal Feed */}
-      <div className="w-full md:w-1/2 bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full md:w-1/2 min-h-[400px] md:min-h-0 bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl">
         <div className="bg-[#1a1a1a] border-b border-[#333] px-4 py-2 flex items-center gap-3">
           <div className="flex gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-error-crimson"></div>

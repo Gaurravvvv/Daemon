@@ -73,7 +73,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-140px)]">
+    <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-140px)] md:h-[calc(100vh-140px)]">
       
       {/* Left Column: Metrics & Controls */}
       <div className="w-full md:w-1/2 flex flex-col gap-6">
@@ -159,7 +159,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
       </div>
 
       {/* Right Column: Live Terminal Feed */}
-      <div className="w-full md:w-1/2 bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full md:w-1/2 min-h-[400px] md:min-h-0 bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl">
         <div className="bg-[#1a1a1a] border-b border-[#333] px-4 py-2 flex items-center gap-3">
           <div className="flex gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-error-crimson"></div>
