@@ -8,7 +8,7 @@ export default function SplashScreen() {
   const router = useRouter();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [particles, setParticles] = useState<React.ReactNode[]>([]);
+  const [particles, setParticles] = useState<React.ReactNode | null>(null);
   const [isHidden, setIsHidden] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -74,8 +74,8 @@ export default function SplashScreen() {
         </div>
       );
 
-      // Trigger animation next frame
-      requestAnimationFrame(() => {
+      // Trigger animation next frame after React has rendered the particles
+      setTimeout(() => {
         requestAnimationFrame(() => {
           pElements.forEach(p => {
             const el = document.getElementById(p.id);
@@ -85,7 +85,7 @@ export default function SplashScreen() {
             }
           });
         });
-      });
+      }, 50);
 
       // Route away after animation
       setTimeout(() => {
@@ -105,18 +105,18 @@ export default function SplashScreen() {
       <div className="scanlines"></div>
       
       {/* Main Splash Container */}
-      <main ref={containerRef} className="h-full w-full flex flex-col items-center justify-center relative z-10">
+      <main ref={containerRef} className="h-full w-full flex flex-col items-center justify-center relative z-10 animate-in fade-in duration-1000">
         
         {/* Content Wrapper (Target for disintegration) */}
         <div 
           ref={wrapperRef}
-          className={`flex flex-col items-center justify-center relative glitch-load emerald-glow ${isHidden ? 'hide-content invisible' : ''}`}
+          className={`flex flex-col items-center justify-center relative ${isHidden ? 'hide-content invisible' : ''}`}
         >
           {/* Logo */}
           <div className="w-32 h-32 mb-8 relative">
             <img 
               alt="DaeMon Square Grid Logo" 
-              className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]" 
+              className="w-full h-full object-contain" 
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1JcJ1dpS1azV8hXhRQhL1fHy2LmJZd8p9g7l6vCLInzUiHEejmrNSv3HYKPPfTIUGiz0fYjDpnPkyGFYrATqHZwnY8Q9poGyDSf8k1tZcMvyoS2WXDRxVUnvQhzRsX2HI_aARcWlAkGdJmXF9GVY83Uu0nUFT2Envsks3fl4IupswOgKQjvGqZL27YrGF_EReVf3JSIyPB4MgM3jPBuhVo9Edrvhn5m9OTtA8pWnzcXF1Awc4Raw7bfkKtBiZQvgrPTntuOdd69cZ"
               crossOrigin="anonymous"
             />

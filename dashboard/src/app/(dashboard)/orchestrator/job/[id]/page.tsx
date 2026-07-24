@@ -2,38 +2,75 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function OrchestratorJobDetails({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const resolvedParams = use(params);
-  const [terminalLogs, setTerminalLogs] = useState<string[]>([
-    "[SYSTEM] Connection established to grid orchestrator.",
-    `[INFO] Job ${resolvedParams.id} initialized. Splitting payload into 100 chunks.`,
-    "[INFO] Pushing chunks to RabbitMQ public_pool...",
-  ]);
+  const [job, setJob] = useState<any>(null);
   const [showWorkers, setShowWorkers] = useState(false);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([
+    "[SYSTEM] Fetching live job metadata from orchestrator...",
+  ]);
 
-  // Mock a live terminal feed
+  const handleHalt = async () => {
+    if (!job) return;
+    try {
+      await fetch(`http://localhost:8000/api/v1/jobs/${resolvedParams.id}/halt`, {
+        method: "PUT",
+      });
+      setJob({ ...job, status: "halted" });
+    } catch (e) {
+      console.error("Failed to halt job", e);
+    }
+  };
+
   useEffect(() => {
-    const events = [
-      "[WORKER] NODE-774A connected to pool.",
-      "[WORKER] NODE-774A started chunk 1.",
-      "[WORKER] NODE-112B connected to pool.",
-      "[WORKER] NODE-112B started chunk 2.",
-      "[SUCCESS] NODE-774A completed chunk 1 in 2.4s",
-      "[INFO] Grid progress: 2/100 chunks.",
-      "[WARNING] NODE-999C timeout. Re-queueing chunk 3."
-    ];
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i < events.length) {
-        setTerminalLogs(prev => [...prev, events[i]]);
-        i++;
-      } else {
-        clearInterval(interval);
+    const fetchJob = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/jobs/${resolvedParams.id}`);
+        if (!res.ok) {
+           if (res.status === 404) router.push("/orchestrator");
+           return;
+        }
+        const data = await res.json();
+        setJob(data);
+      } catch (e) {
+        console.error(e);
       }
-    }, 2000);
+    };
+    fetchJob();
+    const interval = setInterval(fetchJob, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [resolvedParams.id, router]);
+
+  // Dynamic logs based on actual job state
+  useEffect(() => {
+    if (job) {
+      setTerminalLogs(prev => {
+        const newLogs = [...prev];
+        const statusMsg = `[INFO] Job ${job.job_id} status updated to: ${job.status.toUpperCase()}`;
+        if (!newLogs.includes(statusMsg)) {
+          newLogs.push(statusMsg);
+        }
+        
+        const progressMsg = `[PROGRESS] Grid progress: ${job.progress}% completed`;
+        // Only push progress if it's new
+        if (job.progress > 0 && !newLogs.includes(progressMsg)) {
+          newLogs.push(progressMsg);
+        }
+        return newLogs;
+      });
+    }
+  }, [job?.status, job?.progress]);
+
+  if (!job) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <span className="material-symbols-outlined text-4xl text-primary animate-spin">sync</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-140px)]">
@@ -58,26 +95,25 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
             <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Total Progress</span>
-            <span className="text-3xl font-bold font-sans text-primary">78<span className="text-lg text-secondary">%</span></span>
+            <span className="text-3xl font-bold font-sans text-primary">{job?.progress || 0}<span className="text-lg text-secondary">%</span></span>
             <div className="w-full bg-surface-container h-1 mt-2">
-              <div className="bg-success-emerald h-1" style={{ width: '78%' }}></div>
+              <div className="bg-success-emerald h-1 transition-all duration-500" style={{ width: `${job?.progress || 0}%` }}></div>
             </div>
           </div>
           
           <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Active Workers</span>
-            <span className="text-3xl font-bold font-sans text-primary">42</span>
-            <span className="font-mono text-[10px] text-success-emerald mt-1">+3 joined recently</span>
-          </div>
-
-          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Time Elapsed</span>
-            <span className="text-3xl font-bold font-sans text-primary">14<span className="text-lg text-secondary">m</span> 22<span className="text-lg text-secondary">s</span></span>
+            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Job Alias</span>
+            <span className="text-xl font-bold font-sans text-primary mt-1">{job?.job_name || "Unknown"}</span>
           </div>
           
           <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Est. Completion</span>
-            <span className="text-3xl font-bold font-sans text-primary">4<span className="text-lg text-secondary">m</span></span>
+            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Strategy Type</span>
+            <span className="text-xl font-bold font-sans text-primary mt-1">{job?.job_type || "Compute"}</span>
+          </div>
+          
+          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
+            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Target Pool</span>
+            <span className="text-xl font-bold font-sans text-primary mt-1">{job?.pool_id || "public_pool"}</span>
           </div>
         </div>
 
@@ -94,9 +130,13 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
               <span className="material-symbols-outlined text-[16px]">group</span>
               View Connected Workers
             </button>
-            <button className="px-4 py-2 bg-error-crimson/10 text-error-crimson border border-error-crimson/30 hover:bg-error-crimson hover:text-on-error transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2">
+            <button 
+              onClick={handleHalt}
+              disabled={job.status === "halted" || job.status === "completed"}
+              className="px-4 py-2 bg-error-crimson/10 text-error-crimson border border-error-crimson/30 hover:bg-error-crimson hover:text-on-error transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <span className="material-symbols-outlined text-[16px]">stop_circle</span>
-              Halt Entire Task
+              {job.status === "halted" ? "Halted" : "Halt Entire Task"}
             </button>
           </div>
         </div>
@@ -106,15 +146,11 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
           <div className="bg-surface border border-border-base rounded-sm p-4 animate-in fade-in slide-in-from-top-4">
              <h3 className="font-mono text-xs uppercase text-secondary mb-3">Active Node Roster</h3>
              <div className="space-y-2">
-               <div className="flex justify-between items-center text-sm border-b border-border-base/50 pb-2">
-                 <span className="font-mono text-primary font-bold">NODE-774A</span>
-                 <span className="text-secondary font-mono text-xs">8 chunks done</span>
-                 <button className="text-error-crimson hover:underline font-mono text-[10px] uppercase">Kick</button>
-               </div>
-               <div className="flex justify-between items-center text-sm border-b border-border-base/50 pb-2">
-                 <span className="font-mono text-primary font-bold">NODE-112B</span>
-                 <span className="text-secondary font-mono text-xs">2 chunks done</span>
-                 <button className="text-error-crimson hover:underline font-mono text-[10px] uppercase">Kick</button>
+               <div className="flex justify-center items-center text-sm pb-2">
+                 <span className="text-secondary font-mono text-xs text-center">
+                   Node Roster hidden. <br/>
+                   <span className="opacity-70 mt-1 block">(Workers operate securely via RabbitMQ pull mechanism without direct IP exposure)</span>
+                 </span>
                </div>
              </div>
           </div>

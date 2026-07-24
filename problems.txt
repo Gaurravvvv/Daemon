@@ -1,0 +1,3 @@
+Till now , the GPU is remaining
+Basic tests also remaining 
+the container are not doing the tasks , if they do nothing appears on app (orchestrator and worker terminal)

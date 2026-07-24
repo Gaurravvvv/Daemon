@@ -3,11 +3,11 @@ from typing import List
 
 class TaskSplitter:
     @staticmethod
-    def partition_job(job_id: str, raw_data_url: str, parameters: dict, split_count: int = 5) -> List[dict]:
+    def partition_job(job_id: str, raw_data_url: str, job_type: str, parameters: dict, split_count: int) -> List[dict]:
         """
         Simulates splitting a massive job into multiple micro-tasks.
         In a production scenario, this would read the MinIO file size and split byte-ranges.
-        For now, it generates `split_count` dummy chunks.
+        For now, it generates `split_count` dummy chunks based on max_workers.
         """
         tasks = []
         for i in range(split_count):
@@ -15,6 +15,7 @@ class TaskSplitter:
             task = {
                 "job_id": job_id,
                 "task_id": task_id,
+                "job_type": job_type,
                 "raw_data_url": raw_data_url,
                 "chunk_index": i,
                 "total_chunks": split_count,

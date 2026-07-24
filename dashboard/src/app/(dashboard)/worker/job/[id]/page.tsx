@@ -2,31 +2,62 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function WorkerJobDetails({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const resolvedParams = use(params);
+  const [job, setJob] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([
-    "[SYSTEM] Connecting to Grid Worker Interface...",
-    `[INFO] Job ${resolvedParams.id} metadata loaded.`,
-    "[INFO] Awaiting worker node connection...",
+    "[SYSTEM] Fetching live job metadata from orchestrator...",
   ]);
 
-  const dockerCommand = `docker run -e ORCHESTRATOR_URL="http://localhost:8000" -e POOL_ID="public_pool" daemon-worker`;
+  useEffect(() => {
+    const fetchJob = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/jobs/${resolvedParams.id}`);
+        if (!res.ok) {
+           if (res.status === 404) router.push("/worker");
+           return;
+        }
+        const data = await res.json();
+        setJob(data);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchJob();
+    const interval = setInterval(fetchJob, 3000);
+    return () => clearInterval(interval);
+  }, [resolvedParams.id, router]);
+
+  useEffect(() => {
+    if (job) {
+      setTerminalLogs(prev => {
+        const newLogs = [...prev];
+        const statusMsg = `[INFO] Job ${resolvedParams.id} state updated to: ${job.status.toUpperCase()}`;
+        if (!newLogs.includes(statusMsg)) {
+          newLogs.push(statusMsg);
+        }
+        
+        const progressMsg = `[PROGRESS] Grid progress: ${job.progress || 0}% completed`;
+        // Only push progress if it's new
+        if (job.progress > 0 && !newLogs.includes(progressMsg)) {
+          newLogs.push(progressMsg);
+        }
+        return newLogs;
+      });
+    }
+  }, [job?.status, job?.progress, resolvedParams.id]);
+
+  const dockerCommand = `docker run -e ORCHESTRATOR_URL="http://host.docker.internal:8000" -e RABBITMQ_URL="amqp://guest:guest@host.docker.internal:5672/" -e MINIO_URL="http://host.docker.internal:9000" -e POOL_ID="${job?.pool_id || "public_pool"}" daemon-worker`;
 
   const copyCommand = () => {
     navigator.clipboard.writeText(dockerCommand);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  useEffect(() => {
-    // Simulate terminal waiting for you to connect
-    const timer = setTimeout(() => {
-      setTerminalLogs(prev => [...prev, "[WARNING] You are not connected to this job. Start your daemon."]);
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, []);
 
   return (
     <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-140px)]">
@@ -41,8 +72,10 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
               <span className="material-symbols-outlined text-[14px]">arrow_back</span>
               Back to Global Pool
             </Link>
-            <h1 className="text-2xl font-bold font-sans text-primary mb-1">Job #{resolvedParams.id}</h1>
-            <p className="text-sm font-mono text-secondary">Prime Discovery Run 1</p>
+            <h1 className="text-2xl font-bold font-sans text-primary mb-1">{job?.job_name || "Unknown Job"}</h1>
+            <p className="font-mono text-xs text-secondary">
+              Pool: <span className="text-primary">{job?.pool_id || "public_pool"}</span> • Type: <span className="text-primary">{job?.job_type || "Compute"}</span>
+            </p>
           </div>
           
           <button 
@@ -61,18 +94,19 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
           <h2 className="font-mono text-sm font-bold text-primary uppercase mb-4 border-b border-border-base pb-2">Payload Specifications</h2>
           <div className="space-y-4">
             <div>
-              <span className="block font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Processing Type</span>
-              <span className="font-sans text-sm text-primary font-medium">Math / Computation</span>
+              <span className="font-mono text-[10px] text-secondary uppercase tracking-widest block mb-1">Raw Data URI</span>
+              <span className="font-sans font-medium text-sm break-all">{job?.raw_data_url || "Waiting for upload..."}</span>
             </div>
-            <div>
-              <span className="block font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Total Data Size</span>
-              <span className="font-sans text-sm text-primary font-medium">1.2 GB (Split into 100 chunks)</span>
-            </div>
-            <div>
-              <span className="block font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Objective</span>
-              <p className="font-sans text-sm text-secondary">
-                This job analyzes large sets of cryptographic prime numbers. Your node will download chunks of numerical arrays, perform factorization checks, and return the mathematical results to the MinIO storage node.
-              </p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="font-mono text-[10px] text-secondary uppercase tracking-widest block mb-1">Global Progress</span>
+                <span className="font-sans font-medium text-sm text-primary">{job?.progress || 0}%</span>
+              </div>
+              <div>
+                <span className="font-mono text-[10px] text-secondary uppercase tracking-widest block mb-1">Status</span>
+                <span className="font-sans font-medium text-sm text-success-emerald uppercase">{job?.status || "partitioning"}</span>
+              </div>
             </div>
           </div>
         </div>

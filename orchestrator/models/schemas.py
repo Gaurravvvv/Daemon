@@ -21,3 +21,6 @@ class WorkerRegisterRequest(BaseModel):
 class WorkerRegisterResponse(BaseModel):
     status: str
     heartbeat_interval: int
+
+class VerifyPasswordRequest(BaseModel):
+    password: str

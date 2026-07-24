@@ -1,3 +1,4 @@
 pika
 boto3
 requests
+Pillow==11.1.0

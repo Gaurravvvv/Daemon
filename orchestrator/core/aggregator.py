@@ -40,7 +40,11 @@ async def monitor_jobs():
             async for job in cursor:
                 # Simulate that we detected all workers finished
                 # We trigger the stitcher
-                await StateAggregator.stitch_results(job["job_id"])
+                
+                # [DISABLED] The user is testing real workers now. 
+                # We should NOT automatically complete jobs.
+                # await StateAggregator.stitch_results(job["job_id"])
+                pass
                 
         except Exception as e:
             logger.error(f"Error in aggregator loop: {e}")

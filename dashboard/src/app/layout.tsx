@@ -31,6 +31,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${inter.variable} ${courier.variable} antialiased min-h-screen bg-background`}
+        suppressHydrationWarning
       >
         <ThemeProvider
           attribute="class"
