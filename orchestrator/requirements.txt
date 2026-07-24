@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+motor
+pydantic
+pydantic-settings
+redis
+pika
+boto3
+python-dotenv

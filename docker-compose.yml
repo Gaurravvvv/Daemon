@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: daemon_rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: daemon_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    container_name: daemon_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: daemon_minio
+    ports:
+      - "9000:9000"   # API port
+      - "9001:9001"   # Console UI port
+    environment:
+      MINIO_ROOT_USER: Gaurav
+      MINIO_ROOT_PASSWORD: password123  # Needs to be at least 8 chars
+    command: server /data --console-address ":9001"
+    volumes:
+      # Mapping directly to the D:\ drive as requested by the user
+      - D:\Daemon_Minio_Data:/data
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

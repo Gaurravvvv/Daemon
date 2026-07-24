@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+:root {
+  /* Light Theme (Derived) */
+  --background: #ffffff;
+  --foreground: #1a1c1c;
+  --primary: #10B981;
+  --on-primary: #ffffff;
+  --secondary: #5e5e5e;
+  --success-emerald: #10B981;
+  --error-crimson: #EF4444;
+  --border-base: #EAEAEA;
+  --border-hover: #D1D1D1;
+  --surface: #f9f9f9;
+  --surface-container: #eeeeee;
+  --surface-container-highest: #e2e2e2;
+  --bg-subtle: #FAFAFA;
+  --on-surface-variant: #4c4546;
+}
+
+.dark {
+  /* Dark Theme (Emerald Protocol) */
+  --background: #131313;
+  --foreground: #e2e2e2;
+  --primary: #4edea3;
+  --on-primary: #003824;
+  --secondary: #95d3ba;
+  --success-emerald: #10B981;
+  --error-crimson: #ffb4ab;
+  --border-base: #353535;
+  --border-hover: #4edea3;
+  --surface: #1b1b1b;
+  --surface-container: #1f1f1f;
+  --surface-container-highest: #353535;
+  --bg-subtle: #0e0e0e;
+  --on-surface-variant: #bbcabf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-color-primary-container: #10B981;
+  --color-on-primary: var(--on-primary);
+  --color-secondary: var(--secondary);
+  --color-success-emerald: var(--success-emerald);
+  --color-error-crimson: var(--error-crimson);
+  --color-border-base: var(--border-base);
+  --color-border-hover: var(--border-hover);
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-on-surface-variant: var(--on-surface-variant);
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-courier);
+
+  --spacing-margin-lg: 24px;
+  --spacing-margin-md: 16px;
+  --spacing-margin-sm: 8px;
+  --spacing-gutter: 16px;
+  --spacing-container-max: 1200px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--background);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-base);
+}
+
+.active-dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--success-emerald);
+  border-radius: 50%;
+}
+
+/* Animations from DESIGN.md */
+@keyframes slideRight {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes glitch {
+  0% { transform: translate(0) }
+  20% { transform: translate(-2px, 2px) }
+  40% { transform: translate(-2px, -2px) }
+  60% { transform: translate(2px, 2px) }
+  80% { transform: translate(2px, -2px) }
+  100% { transform: translate(0) }
+}
+
+.glitch-load {
+  animation: glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite;
+  animation-iteration-count: 2;
+}
+
+.emerald-glow {
+  filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.15));
+}
+
+.scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0),
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0.1) 50%,
+      rgba(0, 0, 0, 0.1)
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.3;
+}
+
+.pixel-particle {
+  position: absolute;
+  background-color: var(--success-emerald);
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition: transform 1.5s cubic-bezier(0.19, 1, 0.22, 1), opacity 1.5s ease-out;
+}
+
+.hide-content {
+  opacity: 0;
+  transition: opacity 0.1s ease-out;
+}

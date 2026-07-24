@@ -1,176 +1,179 @@
 ---
-name: Monolith Engineering
+name: Emerald Protocol
 colors:
-  surface: '#f9f9f9'
-  surface-dim: '#dadada'
-  surface-bright: '#f9f9f9'
-  surface-container-lowest: '#ffffff'
-  surface-container-low: '#f3f3f4'
-  surface-container: '#eeeeee'
-  surface-container-high: '#e8e8e8'
-  surface-container-highest: '#e2e2e2'
-  on-surface: '#1a1c1c'
-  on-surface-variant: '#4c4546'
-  inverse-surface: '#2f3131'
-  inverse-on-surface: '#f0f1f1'
-  outline: '#7e7576'
-  outline-variant: '#cfc4c5'
-  surface-tint: '#5e5e5e'
-  primary: '#000000'
-  on-primary: '#ffffff'
-  primary-container: '#1b1b1b'
-  on-primary-container: '#848484'
-  inverse-primary: '#c6c6c6'
-  secondary: '#5e5e5e'
-  on-secondary: '#ffffff'
-  secondary-container: '#e1dfdf'
-  on-secondary-container: '#626262'
-  tertiary: '#000000'
-  on-tertiary: '#ffffff'
-  tertiary-container: '#1b1b1b'
-  on-tertiary-container: '#848484'
-  error: '#ba1a1a'
-  on-error: '#ffffff'
-  error-container: '#ffdad6'
-  on-error-container: '#93000a'
-  primary-fixed: '#e2e2e2'
-  primary-fixed-dim: '#c6c6c6'
-  on-primary-fixed: '#1b1b1b'
-  on-primary-fixed-variant: '#474747'
-  secondary-fixed: '#e4e2e2'
-  secondary-fixed-dim: '#c7c6c6'
-  on-secondary-fixed: '#1b1c1c'
-  on-secondary-fixed-variant: '#464747'
-  tertiary-fixed: '#e2e2e2'
-  tertiary-fixed-dim: '#c6c6c6'
-  on-tertiary-fixed: '#1b1b1b'
-  on-tertiary-fixed-variant: '#474747'
-  background: '#f9f9f9'
-  on-background: '#1a1c1c'
-  surface-variant: '#e2e2e2'
-  border-base: '#EAEAEA'
-  border-hover: '#D1D1D1'
-  success-emerald: '#10B981'
-  error-crimson: '#EF4444'
-  bg-subtle: '#FAFAFA'
+  surface: '#131313'
+  surface-dim: '#131313'
+  surface-bright: '#393939'
+  surface-container-lowest: '#0e0e0e'
+  surface-container-low: '#1b1b1b'
+  surface-container: '#1f1f1f'
+  surface-container-high: '#2a2a2a'
+  surface-container-highest: '#353535'
+  on-surface: '#e2e2e2'
+  on-surface-variant: '#bbcabf'
+  inverse-surface: '#e2e2e2'
+  inverse-on-surface: '#303030'
+  outline: '#86948a'
+  outline-variant: '#3c4a42'
+  surface-tint: '#4edea3'
+  primary: '#4edea3'
+  on-primary: '#003824'
+  primary-container: '#10b981'
+  on-primary-container: '#00422b'
+  inverse-primary: '#006c49'
+  secondary: '#95d3ba'
+  on-secondary: '#003829'
+  secondary-container: '#0b513d'
+  on-secondary-container: '#83c2a9'
+  tertiary: '#ffb3af'
+  on-tertiary: '#650911'
+  tertiary-container: '#fc7c78'
+  on-tertiary-container: '#711419'
+  error: '#ffb4ab'
+  on-error: '#690005'
+  error-container: '#93000a'
+  on-error-container: '#ffdad6'
+  primary-fixed: '#6ffbbe'
+  primary-fixed-dim: '#4edea3'
+  on-primary-fixed: '#002113'
+  on-primary-fixed-variant: '#005236'
+  secondary-fixed: '#b0f0d6'
+  secondary-fixed-dim: '#95d3ba'
+  on-secondary-fixed: '#002117'
+  on-secondary-fixed-variant: '#0b513d'
+  tertiary-fixed: '#ffdad7'
+  tertiary-fixed-dim: '#ffb3af'
+  on-tertiary-fixed: '#410005'
+  on-tertiary-fixed-variant: '#842225'
+  background: '#131313'
+  on-background: '#e2e2e2'
+  surface-variant: '#353535'
 typography:
-  display:
-    fontFamily: Inter
-    fontSize: 32px
-    fontWeight: '600'
-    lineHeight: 40px
-    letterSpacing: -0.02em
   headline-lg:
-    fontFamily: Inter
-    fontSize: 24px
-    fontWeight: '600'
-    lineHeight: 32px
-    letterSpacing: -0.015em
+    fontFamily: JetBrains Mono
+    fontSize: 48px
+    fontWeight: '800'
+    lineHeight: '1.1'
+    letterSpacing: -0.02em
   headline-md:
-    fontFamily: Inter
-    fontSize: 18px
-    fontWeight: '600'
-    lineHeight: 28px
+    fontFamily: JetBrains Mono
+    fontSize: 32px
+    fontWeight: '700'
+    lineHeight: '1.2'
     letterSpacing: -0.01em
+  headline-sm:
+    fontFamily: JetBrains Mono
+    fontSize: 24px
+    fontWeight: '700'
+    lineHeight: '1.2'
+  subheading-lg:
+    fontFamily: Hanken Grotesk
+    fontSize: 18px
+    fontWeight: '300'
+    lineHeight: '1.5'
+    letterSpacing: 0.15em
   body-lg:
-    fontFamily: Inter
+    fontFamily: Hanken Grotesk
+    fontSize: 18px
+    fontWeight: '400'
+    lineHeight: '1.6'
+  body-md:
+    fontFamily: Hanken Grotesk
     fontSize: 16px
     fontWeight: '400'
-    lineHeight: 24px
-  body-md:
-    fontFamily: Inter
-    fontSize: 14px
-    fontWeight: '400'
-    lineHeight: 20px
-  body-sm:
-    fontFamily: Inter
-    fontSize: 13px
-    fontWeight: '400'
-    lineHeight: 18px
+    lineHeight: '1.6'
   label-md:
-    fontFamily: Inter
-    fontSize: 12px
+    fontFamily: Space Mono
+    fontSize: 14px
     fontWeight: '500'
-    lineHeight: 16px
-    letterSpacing: 0.01em
-  mono-label:
-    fontFamily: courierPrime
+    lineHeight: '1.4'
+    letterSpacing: 0.05em
+  code-sm:
+    fontFamily: JetBrains Mono
     fontSize: 12px
     fontWeight: '400'
-    lineHeight: 16px
+    lineHeight: '1.4'
 spacing:
   unit: 4px
-  gutter: 16px
-  margin-sm: 8px
-  margin-md: 16px
-  margin-lg: 24px
-  container-max: 1200px
+  gutter: 24px
+  margin-mobile: 16px
+  margin-desktop: 64px
+  container-max: 1440px
 ---
 
 ## Brand & Style
 
-This design system embodies a high-density, engineering-focused aesthetic characterized by extreme precision and functional minimalism. It is designed for power users who value information density, speed, and clarity over decorative flourishes. 
+This design system establishes a premium, retro-futuristic hacker aesthetic optimized for high-performance distributed computing. The brand personality is technical, cold, and authoritative—evoking the feeling of a sophisticated command-and-control interface.
 
-The visual language is "Stark Light Mode," drawing heavily from modern developer tools. It utilizes a strict flat design philosophy—discarding all shadows, gradients, and blurs in favor of structural integrity provided by thin lines and high-contrast typography. The emotional response is one of efficiency, reliability, and technical sophistication.
+The design style is a hybrid of **Minimalism** and **Modern Retro-Futurism**. It utilizes a "pitch-black" foundation to maximize the vibrance of its emerald primary color, creating a high-contrast environment that demands focus. Visual metaphors are drawn from mainframe terminals and tactical displays, refined through a high-end lens with generous whitespace and ultra-thin structural lines. It avoids the clutter of traditional "cyberpunk" styles in favor of a clean, systematic, and expensive feel.
 
 ## Colors
 
-The palette is strictly monochrome to ensure focus remains on content and functionality. 
-- **Core Surface:** Pure white (#FFFFFF) is the exclusive background for primary workspaces.
-- **Accents:** Emerald Green and Crimson Red are used sparingly and solely for functional status indicators (Success/Active vs. Error/Offline).
-- **Secondary Text:** Muted slate gray (#666666) provides hierarchy without sacrificing legibility.
-- **Borders:** A consistent light gray (#EAEAEA) defines the structure, darkening slightly on interaction to provide feedback without depth.
+The palette is strictly anchored in monochrome blacks and a singular emerald spectrum. 
+
+- **Primary Emerald (#10B981):** Used for critical data, active states, and primary typography. It should "glow" against the background.
+- **Deep Emerald (#064E3B):** Reserved for low-priority UI elements, inactive borders, and subtle containers.
+- **Pitch Black (#000000):** The absolute background for all primary views, ensuring infinite depth.
+- **Accent Emerald (#34D399):** High-brightness variant for hover states and micro-interactions.
+
+Secondary accents like "Warning Red" should be used sparingly and only for system errors, maintaining the monochromatic integrity of the interface.
 
 ## Typography
 
-The system utilizes **Inter** for all UI elements to maintain a clean, systematic appearance. 
-- **Headlines:** Set in pitch black (#000000) with tight letter-spacing for a "machined" look.
-- **Body:** Standardized at 14px for most interfaces to maintain high information density.
-- **Data/Code:** Where technical values or IDs are presented, use a secondary monospace font (Courier Prime) to distinguish data from UI labels.
-- **Hierarchy:** Contrast is achieved through font weight and color (Black vs. Gray) rather than large scale variations.
+The typography system relies on the tension between a brutalist, technical monospace and a sophisticated, airy sans-serif.
+
+**Headlines** use *JetBrains Mono* in heavy weights. This provides the "hacker" DNA, feeling structured and unyielding. 
+
+**Subheadings and Body** use *Hanken Grotesk* with increased letter-spacing. This adds the "premium" layer, making the technical data readable and elegant. 
+
+For **Labels and Data Points**, *Space Mono* is used to maintain the terminal aesthetic at small scales. All subheadings should be set in uppercase with wide tracking (15%+) to evoke high-end architectural documentation.
 
 ## Layout & Spacing
 
-This system uses a strict 4px grid. Layouts should favor a **fixed-fluid hybrid** approach: sidebars and utility panels use fixed widths (e.g., 240px or 64px), while the primary work area is fluid.
+This design system employs a **Fixed Grid** philosophy to maintain the rigidity of a technical instrument. 
 
-- **High Density:** Padding within components is kept to a minimum (8px to 12px) to allow more data to be visible on-screen simultaneously.
-- **Grid:** Use a 12-column grid for marketing or dashboard layouts, but rely on flexible flexbox/grid containers for application views.
-- **Borders as Dividers:** Use 1px borders (#EAEAEA) instead of whitespace to separate distinct functional areas.
+- **Grid:** A 12-column grid for desktop, 8-column for tablet, and 4-column for mobile.
+- **Rhythm:** An 8px base unit drives all padding and margins to ensure mathematical alignment.
+- **Density:** High whitespace is required. Content should be "islanded" within the pitch-black void, never cramped.
+- **Structural Lines:** Use 1px emerald borders (opacity 10-20%) instead of background shifts to define sections, mimicking blueprint or CAD layouts.
 
 ## Elevation & Depth
 
-This design system is strictly 2D. 
-- **No Shadows:** Do not use `box-shadow` or any depth-simulating effects.
-- **Tonal Separation:** Elevation is conveyed through color alone. For example, a "raised" element like a modal or dropdown is given a 1px border and a subtle background change (#FAFAFA) or remains white with a slightly darker border than the base surface.
-- **Active States:** Active or focused items are indicated by a 1px solid black border or a background fill of #000000 with white text.
+In a pitch-black environment, depth is conveyed through **Light Emission** rather than shadows.
+
+1.  **Tonal Layers:** There is no "surface" color; the background is always black. Higher elevation is indicated by increased border opacity or subtle background tints (e.g., Emerald at 4% opacity).
+2.  **Glow (Bloom):** High-priority elements use a soft emerald outer glow (blur: 20px, opacity: 15%) to simulate a CRT phosphor effect.
+3.  **Thin Outlines:** Hierarchy is defined by border thickness and intensity. 1px solid Emerald for active containers; 1px dashed or 20% opacity for inactive ones.
+4.  **Backdrop Blurs:** Use sparingly behind floating panels (modals) with a 20px blur to maintain focus on the technical data underneath without losing the sense of space.
 
 ## Shapes
 
-The shape language is industrial and sharp. 
-- **Sharp Corners:** All buttons, input fields, cards, and containers must have 0px border-radius.
-- **Consistency:** Square corners emphasize the technical, "grid-based" nature of the product.
-- **Visual Rhythm:** Geometric precision is key; all boxes must align perfectly with the 4px spacing grid.
+The shape language is strictly **Sharp (0px)**. 
+
+To maintain the precision of a distributed computing tool, all buttons, inputs, and cards must have square corners. This reinforces the technical, "no-nonsense" character of the system. 
+
+The only exception is for specific iconography or "node" visualizations (like the brain-circuit logo), which may use small 2px or 4px radii to indicate connectivity points. All structural UI elements remain perfectly angular.
 
 ## Components
 
 ### Buttons
-- **Primary:** Solid black background, white text, sharp corners.
-- **Secondary:** White background, 1px #EAEAEA border, black text.
-- **Hover State:** Secondary buttons change border to #D1D1D1; Primary buttons reduce opacity slightly (to 0.9).
+- **Primary:** No fill. 1px solid Emerald border. Text is Emerald Mono, Uppercase. On hover: Emerald fill, Black text, subtle Bloom effect.
+- **Ghost:** No border. Emerald text. On hover: 10% Emerald background tint.
 
 ### Input Fields
-- **Default:** 1px #EAEAEA border, white background, 14px text.
-- **Focus:** 1px black border. No "glow" or shadow.
-- **Error:** 1px #EF4444 (Crimson) border.
+- **Default:** Bottom-border only (1px Emerald). Monospace font.
+- **Focus:** Full 1px border with a "scanning" animation (a subtle highlight line that moves across the border).
 
-### Chips & Tags
-- Small, 12px text, light gray background (#F5F5F5) or subtle 1px border. Used for status or categories.
+### Cards / Containers
+- No background color. 1px Emerald border at 20% opacity. 
+- Header section separated by a 1px solid line.
+- Use "Corner Markers" (L-shaped accents) on the four corners for high-priority modules.
 
-### Lists & Tables
-- High density. 1px bottom border on rows. 
-- Hover state: Background changes to #FAFAFA.
-- Use #666666 for secondary data columns.
+### Status Chips
+- Square corners. Small monospace text. 
+- Use a "pulse" animation for active nodes/daemons (a small Emerald square that fades in/out).
 
-### Cards
-- No shadows. Defined solely by a 1px #EAEAEA border. 
-- Headers inside cards should be separated by a 1px horizontal line.
+### Lists & Data Tables
+- No row backgrounds. 1px horizontal dividers only.
+- Right-aligned numerical data in Monospace for perfect vertical alignment.
+- Use thin vertical "guides" for column separation in complex data views.
