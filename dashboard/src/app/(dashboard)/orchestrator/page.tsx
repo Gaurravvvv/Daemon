@@ -80,7 +80,7 @@ export default function OrchestratorDashboard() {
             <form onSubmit={handleCreateJob} className="p-6 space-y-4">
               <div>
                 <label className="font-mono text-xs font-semibold text-secondary uppercase block mb-1.5">Job Alias</label>
-                <input required name="job_name" type="text" className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-sm" placeholder="e.g. hash_verifier_batch_A" />
+                <input required name="job_name" type="text" className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-sm" placeholder="e.g. edge_detect_batch_01" />
               </div>
               
               <div className="grid grid-cols-3 gap-4">
@@ -100,8 +100,12 @@ export default function OrchestratorDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="font-mono text-xs font-semibold text-secondary uppercase block mb-1.5">Max Workers</label>
-                  <input required name="max_workers" type="number" min="1" max="1000" defaultValue="10" className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary rounded-sm" />
+                  <label className="font-mono text-xs font-semibold text-secondary uppercase block mb-1.5">Compute Mode</label>
+                  <select name="compute_mode" className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary rounded-sm">
+                    <option value="any">Any (Hybrid)</option>
+                    <option value="gpu_only">GPU Only</option>
+                    <option value="cpu_only">CPU Only</option>
+                  </select>
                 </div>
               </div>
 
@@ -113,7 +117,7 @@ export default function OrchestratorDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="font-mono text-xs font-semibold text-secondary uppercase block mb-1.5">Max Worker Nodes</label>
-                  <input required name="max_workers" type="number" defaultValue={100} className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary rounded-sm" />
+                  <input required name="max_workers" type="number" min="1" max="1000" defaultValue={10} className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary rounded-sm" />
                   <p className="text-[10px] text-secondary mt-1 font-mono">Limit how many chunks this payload can be split into.</p>
                 </div>
                 <div>

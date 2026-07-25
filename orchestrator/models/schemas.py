@@ -6,6 +6,7 @@ class JobSubmitRequest(BaseModel):
     job_type: str = Field(..., description="Type of job (e.g., image_processing, math)")
     pool_id: str = Field(..., description="Target pool (e.g., public_pool, user_1_pool)")
     raw_data_url: str = Field(..., description="MinIO URL to raw dataset")
+    compute_mode: str = Field(default="any", description="Compute preference: gpu_only, cpu_only, any")
     parameters: Optional[Dict[str, Any]] = Field(default={}, description="Job specific params")
 
 class JobSubmitResponse(BaseModel):

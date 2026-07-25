@@ -37,7 +37,6 @@ class MinioStorage:
 
     async def upload_file(self, file: UploadFile, object_name: str) -> str:
         try:
-            # Read file into memory and upload
             contents = await file.read()
             self.s3.put_object(
                 Bucket=self.bucket_name,
@@ -49,6 +48,32 @@ class MinioStorage:
             return f"minio://{self.bucket_name}/{object_name}"
         except Exception as e:
             logger.error(f"Failed to upload {object_name}: {e}")
+            raise e
+
+    def list_results(self, job_id: str) -> list:
+        """List all result files for a job in MinIO."""
+        try:
+            prefix = f"{job_id}/results/"
+            response = self.s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+            files = []
+            for obj in response.get("Contents", []):
+                files.append({
+                    "key": obj["Key"],
+                    "filename": obj["Key"].split("/")[-1],
+                    "size": obj["Size"],
+                })
+            return files
+        except Exception as e:
+            logger.error(f"Failed to list results for {job_id}: {e}")
+            return []
+
+    def download_file(self, object_key: str) -> bytes:
+        """Download a file from MinIO and return its bytes."""
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=object_key)
+            return response["Body"].read()
+        except Exception as e:
+            logger.error(f"Failed to download {object_key}: {e}")
             raise e
 
 storage = MinioStorage()

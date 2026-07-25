@@ -1,17 +1,25 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+interface EventLog {
+  timestamp: string;
+  source: string;
+  level: string;
+  message: string;
+  worker_id?: string;
+}
 
 export default function OrchestratorJobDetails({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
   const [job, setJob] = useState<any>(null);
   const [showWorkers, setShowWorkers] = useState(false);
-  const [terminalLogs, setTerminalLogs] = useState<string[]>([
-    "[SYSTEM] Fetching live job metadata from orchestrator...",
-  ]);
+  const [events, setEvents] = useState<EventLog[]>([]);
+  const lastTimestampRef = useRef<string | null>(null);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
   const handleHalt = async () => {
     if (!job) return;
@@ -25,6 +33,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
     }
   };
 
+  // Poll job status
   useEffect(() => {
     const fetchJob = async () => {
       try {
@@ -33,36 +42,40 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
            if (res.status === 404) router.push("/orchestrator");
            return;
         }
-        const data = await res.json();
-        setJob(data);
-      } catch (e) {
-        console.error(e);
-      }
+        setJob(await res.json());
+      } catch (e) { /* retry next interval */ }
     };
     fetchJob();
     const interval = setInterval(fetchJob, 3000);
     return () => clearInterval(interval);
   }, [resolvedParams.id, router]);
 
-  // Dynamic logs based on actual job state
+  // Poll real events from the API
   useEffect(() => {
-    if (job) {
-      setTerminalLogs(prev => {
-        const newLogs = [...prev];
-        const statusMsg = `[INFO] Job ${job.job_id} status updated to: ${job.status.toUpperCase()}`;
-        if (!newLogs.includes(statusMsg)) {
-          newLogs.push(statusMsg);
+    const fetchEvents = async () => {
+      try {
+        const url = lastTimestampRef.current
+          ? `http://localhost:8000/api/v1/jobs/${resolvedParams.id}/events?after=${encodeURIComponent(lastTimestampRef.current)}`
+          : `http://localhost:8000/api/v1/jobs/${resolvedParams.id}/events`;
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const data = await res.json();
+        const newEvents: EventLog[] = data.events || [];
+        if (newEvents.length > 0) {
+          setEvents(prev => [...prev, ...newEvents]);
+          lastTimestampRef.current = newEvents[newEvents.length - 1].timestamp;
         }
-        
-        const progressMsg = `[PROGRESS] Grid progress: ${job.progress}% completed`;
-        // Only push progress if it's new
-        if (job.progress > 0 && !newLogs.includes(progressMsg)) {
-          newLogs.push(progressMsg);
-        }
-        return newLogs;
-      });
-    }
-  }, [job?.status, job?.progress]);
+      } catch (e) { /* retry next interval */ }
+    };
+    fetchEvents();
+    const interval = setInterval(fetchEvents, 2000);
+    return () => clearInterval(interval);
+  }, [resolvedParams.id]);
+
+  // Auto-scroll terminal
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [events]);
 
   if (!job) {
     return (
@@ -72,11 +85,22 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
     );
   }
 
+  const getLogColor = (level: string) => {
+    switch (level) {
+      case "SUCCESS": return "text-success-emerald";
+      case "WARNING": return "text-amber-500";
+      case "ERROR": return "text-error-crimson";
+      case "SYSTEM": return "text-blue-400";
+      case "INFO": return "text-purple-400";
+      default: return "text-gray-300";
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-140px)] md:h-[calc(100vh-140px)]">
       
       {/* Left Column: Metrics & Controls */}
-      <div className="w-full md:w-1/2 flex flex-col gap-6">
+      <div className="w-full md:w-1/2 flex flex-col gap-6 overflow-y-auto">
         
         {/* Header */}
         <div>
@@ -86,9 +110,14 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
           </Link>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold font-sans text-primary">Job #{resolvedParams.id}</h1>
-            <span className="bg-success-emerald/10 text-success-emerald border border-success-emerald/20 px-2 py-0.5 rounded text-xs font-mono uppercase">Active</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-mono uppercase border ${
+              job.status === 'completed' ? 'bg-success-emerald/10 text-success-emerald border-success-emerald/20' :
+              job.status === 'halted' ? 'bg-error-crimson/10 text-error-crimson border-error-crimson/20' :
+              job.status === 'processing' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+              'bg-surface-tint/10 text-surface-tint border-surface-tint/20'
+            }`}>{job.status}</span>
           </div>
-          <p className="text-sm font-mono text-secondary">Hash Verifier Batch A</p>
+          <p className="text-sm font-mono text-secondary">{job.job_name || 'Unnamed Job'}</p>
         </div>
 
         {/* Big Metrics Grid */}
@@ -115,6 +144,19 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
             <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Target Pool</span>
             <span className="text-xl font-bold font-sans text-primary mt-1">{job?.pool_id || "public_pool"}</span>
           </div>
+
+          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
+            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Compute Mode</span>
+            <span className={`text-xl font-bold font-sans mt-1 ${
+              job?.compute_mode === 'gpu_only' ? 'text-amber-400' :
+              job?.compute_mode === 'cpu_only' ? 'text-blue-400' :
+              'text-success-emerald'
+            }`}>
+              {job?.compute_mode === 'gpu_only' ? 'GPU Only' :
+               job?.compute_mode === 'cpu_only' ? 'CPU Only' :
+               'Hybrid'}
+            </span>
+          </div>
         </div>
 
         {/* Controls */}
@@ -124,13 +166,6 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
           </div>
           <div className="p-4 flex flex-wrap gap-3">
             <button 
-              onClick={() => setShowWorkers(!showWorkers)}
-              className="px-4 py-2 bg-surface text-primary border border-border-base hover:border-primary transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[16px]">group</span>
-              View Connected Workers
-            </button>
-            <button 
               onClick={handleHalt}
               disabled={job.status === "halted" || job.status === "completed"}
               className="px-4 py-2 bg-error-crimson/10 text-error-crimson border border-error-crimson/30 hover:bg-error-crimson hover:text-on-error transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -138,23 +173,17 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
               <span className="material-symbols-outlined text-[16px]">stop_circle</span>
               {job.status === "halted" ? "Halted" : "Halt Entire Task"}
             </button>
+            {job.status === "completed" && (
+              <a
+                href={`http://localhost:8000/api/v1/jobs/${resolvedParams.id}/download`}
+                className="px-4 py-2 bg-success-emerald/10 text-success-emerald border border-success-emerald/30 hover:bg-success-emerald hover:text-on-primary transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[16px]">download</span>
+                Download Results
+              </a>
+            )}
           </div>
         </div>
-
-        {/* View Workers Panel (Toggled) */}
-        {showWorkers && (
-          <div className="bg-surface border border-border-base rounded-sm p-4 animate-in fade-in slide-in-from-top-4">
-             <h3 className="font-mono text-xs uppercase text-secondary mb-3">Active Node Roster</h3>
-             <div className="space-y-2">
-               <div className="flex justify-center items-center text-sm pb-2">
-                 <span className="text-secondary font-mono text-xs text-center">
-                   Node Roster hidden. <br/>
-                   <span className="opacity-70 mt-1 block">(Workers operate securely via RabbitMQ pull mechanism without direct IP exposure)</span>
-                 </span>
-               </div>
-             </div>
-          </div>
-        )}
 
       </div>
 
@@ -167,25 +196,25 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
             <div className="w-2.5 h-2.5 rounded-full bg-success-emerald"></div>
           </div>
           <span className="font-mono text-[10px] text-gray-400 uppercase tracking-widest ml-4">Live Orchestrator Feed</span>
+          <span className="ml-auto font-mono text-[10px] text-gray-600">{events.length} events</span>
         </div>
         
         <div className="p-4 flex-grow overflow-y-auto font-mono text-xs custom-scrollbar">
-          {terminalLogs.map((log, idx) => {
-            if (!log) return null;
-            let color = "text-gray-300";
-            if (log.includes("[SUCCESS]")) color = "text-success-emerald";
-            if (log.includes("[WARNING]")) color = "text-amber-500";
-            if (log.includes("[SYSTEM]")) color = "text-blue-400";
-            if (log.includes("[INFO]")) color = "text-purple-400";
-            
+          {events.length === 0 && (
+            <div className="text-gray-500 mb-2">Waiting for events...</div>
+          )}
+          {events.map((evt, idx) => {
+            const time = new Date(evt.timestamp).toLocaleTimeString();
             return (
               <div key={idx} className="mb-1.5 flex gap-3">
-                <span className="text-gray-600 select-none">{new Date().toISOString().substring(11, 19)}</span>
-                <span className={color}>{log}</span>
+                <span className="text-gray-600 select-none shrink-0">{time}</span>
+                <span className={`${getLogColor(evt.level)} break-all`}>
+                  [{evt.source}] {evt.message}
+                </span>
               </div>
             );
           })}
-          <div className="mt-2 text-gray-500 animate-pulse">_</div>
+          <div ref={terminalEndRef} className="mt-2 text-gray-500 animate-pulse">_</div>
         </div>
       </div>
 

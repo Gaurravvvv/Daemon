@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi.responses import StreamingResponse
+import io
+import zipfile
 from typing import List, Optional
 import uuid
 import random
 import logging
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from models.schemas import JobSubmitRequest, JobSubmitResponse, WorkerRegisterRequest, WorkerRegisterResponse, VerifyPasswordRequest
 from services.rabbitmq import rabbitmq_client
@@ -12,6 +16,20 @@ from services.database import db
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
+
+# ── Helper to push events into MongoDB ──
+async def _emit_event(job_id: str, source: str, level: str, message: str, worker_id: str = None):
+    """Store a real-time event in the job_events collection."""
+    event = {
+        "job_id": job_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+        "level": level,
+        "message": message,
+    }
+    if worker_id:
+        event["worker_id"] = worker_id
+    await db.db.job_events.insert_one(event)
 
 @router.get("/jobs")
 async def list_jobs():
@@ -73,6 +91,7 @@ async def submit_job(job_request: JobSubmitRequest):
         "status": "partitioning",
         "pool_id": job_request.pool_id,
         "raw_data_url": job_request.raw_data_url,
+        "compute_mode": job_request.compute_mode,
         "progress": 0
     }
     await db.db.jobs.insert_one(job_doc)
@@ -82,7 +101,8 @@ async def submit_job(job_request: JobSubmitRequest):
         raw_data_url=job_request.raw_data_url, 
         job_type=job_request.job_type,
         parameters=job_request.parameters,
-        split_count=5
+        split_count=5,
+        compute_mode=job_request.compute_mode
     )
     
     for task in tasks:
@@ -100,6 +120,7 @@ async def upload_and_submit(
     job_type: str = Form(...),
     pool_id: str = Form(...),
     max_workers: int = Form(100),
+    compute_mode: str = Form("any"),
     password: Optional[str] = Form(None),
     file: UploadFile = File(...)
 ):
@@ -118,6 +139,7 @@ async def upload_and_submit(
         "status": "partitioning",
         "pool_id": pool_id,
         "raw_data_url": raw_data_url,
+        "compute_mode": compute_mode,
         "progress": 0
     }
     if password:
@@ -125,15 +147,20 @@ async def upload_and_submit(
         
     await db.db.jobs.insert_one(job_doc)
     
+    compute_label = {"gpu_only": "GPU Only", "cpu_only": "CPU Only", "any": "Hybrid"}.get(compute_mode, compute_mode)
+    await _emit_event(job_id, "ORCHESTRATOR", "SYSTEM", f"Job '{job_name}' created [{compute_label}]. Uploading payload to MinIO...")
+    
     # 4. Partition the Job into Micro-Tasks
-    # For a real pipeline, the splitter reads from raw_data_url and creates byte-range chunks.
     tasks = TaskSplitter.partition_job(
         job_id=job_id, 
         raw_data_url=raw_data_url, 
         job_type=job_type,
         parameters={"max_workers": max_workers},
-        split_count=max_workers
+        split_count=max_workers,
+        compute_mode=compute_mode
     )
+    
+    await _emit_event(job_id, "ORCHESTRATOR", "INFO", f"Partitioned into {len(tasks)} chunks. Publishing to queue '{pool_id}'...")
     
     # 5. Push Tasks to RabbitMQ
     for task in tasks:
@@ -145,6 +172,8 @@ async def upload_and_submit(
     # 6. Update Status in DB
     await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing"}})
     
+    await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {len(tasks)} chunks queued. Job is now PROCESSING.")
+    
     return {"job_id": job_id, "status": "processing", "raw_data_url": raw_data_url}
 
 @router.put("/jobs/{job_id}/halt")
@@ -154,6 +183,7 @@ async def halt_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
         
     await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "halted"}})
+    await _emit_event(job_id, "ORCHESTRATOR", "WARNING", "Job HALTED by orchestrator. Workers will discard remaining chunks.")
     return {"status": "halted"}
 
 @router.delete("/jobs/{job_id}")
@@ -163,6 +193,8 @@ async def delete_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
         
     await db.db.jobs.delete_one({"job_id": job_id})
+    # Also clean up events
+    await db.db.job_events.delete_many({"job_id": job_id})
     return {"status": "deleted"}
 
 class TaskCompleteRequest(BaseModel):
@@ -183,12 +215,70 @@ async def task_complete(job_id: str, req: TaskCompleteRequest):
     update_data = {"progress": new_progress}
     if new_progress >= 100:
         update_data["status"] = "completed"
+        await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All chunks completed. Job finished at 100%.")
         
     await db.db.jobs.update_one(
         {"job_id": job_id},
         {"$set": update_data}
     )
     return {"status": "success", "progress": new_progress}
+
+# ── Event Log Endpoints ──
+
+class EventLogRequest(BaseModel):
+    source: str
+    level: str
+    message: str
+    worker_id: Optional[str] = None
+
+@router.post("/jobs/{job_id}/events")
+async def post_event(job_id: str, req: EventLogRequest):
+    """Workers push real-time events here."""
+    await _emit_event(job_id, req.source, req.level, req.message, req.worker_id)
+    return {"status": "logged"}
+
+@router.get("/jobs/{job_id}/events")
+async def get_events(job_id: str, after: Optional[str] = Query(None)):
+    """Dashboard polls this to get new events."""
+    query = {"job_id": job_id}
+    if after:
+        query["timestamp"] = {"$gt": after}
+    
+    events = []
+    cursor = db.db.job_events.find(query).sort("timestamp", 1).limit(200)
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        events.append(doc)
+    return {"events": events}
+
+# ── Results / Download Endpoints ──
+
+@router.get("/jobs/{job_id}/results")
+async def list_results(job_id: str):
+    """List all processed result files for a completed job."""
+    files = storage.list_results(job_id)
+    return {"files": files}
+
+@router.get("/jobs/{job_id}/download")
+async def download_results(job_id: str):
+    """Zip all result files and stream as a download."""
+    files = storage.list_results(job_id)
+    if not files:
+        raise HTTPException(status_code=404, detail="No results found for this job")
+    
+    # Create zip in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            file_bytes = storage.download_file(f["key"])
+            zf.writestr(f["filename"], file_bytes)
+    
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={job_id}_results.zip"}
+    )
 
 @router.post("/workers/register", response_model=WorkerRegisterResponse)
 async def register_worker(worker: WorkerRegisterRequest):
