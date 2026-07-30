@@ -24,7 +24,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
   const handleHalt = async () => {
     if (!job) return;
     try {
-      await fetch(`http://localhost:8000/api/v1/jobs/${resolvedParams.id}/halt`, {
+      await fetch(`http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/halt`, {
         method: "PUT",
       });
       setJob({ ...job, status: "halted" });
@@ -37,7 +37,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
   useEffect(() => {
     const fetchJob = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/jobs/${resolvedParams.id}`);
+        const res = await fetch(`http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}`);
         if (!res.ok) {
            if (res.status === 404) router.push("/orchestrator");
            return;
@@ -55,8 +55,8 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
     const fetchEvents = async () => {
       try {
         const url = lastTimestampRef.current
-          ? `http://localhost:8000/api/v1/jobs/${resolvedParams.id}/events?after=${encodeURIComponent(lastTimestampRef.current)}`
-          : `http://localhost:8000/api/v1/jobs/${resolvedParams.id}/events`;
+          ? `http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/events?after=${encodeURIComponent(lastTimestampRef.current)}`
+          : `http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/events`;
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
@@ -175,7 +175,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
             </button>
             {job.status === "completed" && (
               <a
-                href={`http://localhost:8000/api/v1/jobs/${resolvedParams.id}/download`}
+                href={`http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/download`}
                 className="px-4 py-2 bg-success-emerald/10 text-success-emerald border border-success-emerald/30 hover:bg-success-emerald hover:text-on-primary transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-[16px]">download</span>

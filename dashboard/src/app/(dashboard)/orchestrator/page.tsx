@@ -13,11 +13,13 @@ export default function OrchestratorDashboard() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/v1/jobs");
+        const res = await fetch("http://127.0.0.1:8000/api/v1/jobs");
         const data = await res.json();
         setActiveJobs(data.jobs || []);
       } catch (e) {
-        console.error("Failed to fetch jobs", e);
+        // Backend is offline, ignore gracefully instead of throwing console.error
+        // which triggers Next.js red error overlay
+        setActiveJobs([]);
       }
     };
     fetchJobs();
@@ -32,7 +34,7 @@ export default function OrchestratorDashboard() {
     const formData = new FormData(e.currentTarget);
     
     try {
-      const res = await fetch("http://localhost:8000/api/v1/jobs/upload_and_submit", {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/jobs/upload_and_submit", {
         method: "POST",
         body: formData,
       });
@@ -45,7 +47,8 @@ export default function OrchestratorDashboard() {
         router.push(`/orchestrator/job/${data.job_id}`);
       }
     } catch (e) {
-      console.error(e);
+      // Backend is offline, show alert instead of throwing console.error
+      alert("Failed to submit job. Please ensure the backend is running on port 8000.");
       setIsSubmitting(false);
     }
   };
@@ -53,14 +56,14 @@ export default function OrchestratorDashboard() {
   const handleDeleteJob = async (jobId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/jobs/${jobId}`, {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/jobs/${jobId}`, {
         method: "DELETE"
       });
       if (res.ok) {
         setActiveJobs(prev => prev.filter(j => j.job_id !== jobId));
       }
     } catch (e) {
-      console.error("Failed to delete job", e);
+      alert("Failed to delete job. Backend may be offline.");
     }
   };
 

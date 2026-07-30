@@ -16,11 +16,13 @@ export default function WorkerDashboard() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/v1/jobs");
+        const res = await fetch("http://127.0.0.1:8000/api/v1/jobs");
         const data = await res.json();
         setJobs(data.jobs || []);
       } catch (e) {
-        console.error("Failed to fetch jobs", e);
+        // Backend is offline, ignore gracefully instead of throwing console.error
+        // which triggers Next.js red error overlay
+        setJobs([]);
       }
     };
     fetchJobs();
@@ -53,7 +55,7 @@ export default function WorkerDashboard() {
     setPasswordError("");
     
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/jobs/${selectedJob.job_id}/verify_password`, {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/jobs/${selectedJob.job_id}/verify_password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: passwordInput })

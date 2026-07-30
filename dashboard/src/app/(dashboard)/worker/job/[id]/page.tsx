@@ -25,7 +25,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
   useEffect(() => {
     const fetchJob = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/jobs/${resolvedParams.id}`);
+        const res = await fetch(`http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}`);
         if (!res.ok) {
            if (res.status === 404) router.push("/worker");
            return;
@@ -43,8 +43,8 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
     const fetchEvents = async () => {
       try {
         const url = lastTimestampRef.current
-          ? `http://localhost:8000/api/v1/jobs/${resolvedParams.id}/events?after=${encodeURIComponent(lastTimestampRef.current)}`
-          : `http://localhost:8000/api/v1/jobs/${resolvedParams.id}/events`;
+          ? `http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/events?after=${encodeURIComponent(lastTimestampRef.current)}`
+          : `http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/events`;
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
