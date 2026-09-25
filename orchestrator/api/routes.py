@@ -92,7 +92,9 @@ async def submit_job(job_request: JobSubmitRequest):
         "pool_id": job_request.pool_id,
         "raw_data_url": job_request.raw_data_url,
         "compute_mode": job_request.compute_mode,
-        "progress": 0
+        "progress": 0,
+        "total_chunks": 5,
+        "completed_chunks": 0
     }
     await db.db.jobs.insert_one(job_doc)
     
@@ -111,7 +113,7 @@ async def submit_job(job_request: JobSubmitRequest):
             task_payload=task
         )
     
-    await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing"}})
+    await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing", "total_chunks": len(tasks), "completed_chunks": 0}})
     return {"job_id": job_id, "status": "processing"}
 
 @router.post("/jobs/upload_and_submit", status_code=202)
@@ -140,7 +142,9 @@ async def upload_and_submit(
         "pool_id": pool_id,
         "raw_data_url": raw_data_url,
         "compute_mode": compute_mode,
-        "progress": 0
+        "progress": 0,
+        "total_chunks": max_workers,
+        "completed_chunks": 0
     }
     if password:
         job_doc["password"] = password
@@ -170,7 +174,7 @@ async def upload_and_submit(
         )
     
     # 6. Update Status in DB
-    await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing"}})
+    await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing", "total_chunks": len(tasks), "completed_chunks": 0}})
     
     await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {len(tasks)} chunks queued. Job is now PROCESSING.")
     
@@ -202,20 +206,27 @@ class TaskCompleteRequest(BaseModel):
 
 @router.post("/jobs/{job_id}/task_complete")
 async def task_complete(job_id: str, req: TaskCompleteRequest):
-    job = await db.db.jobs.find_one({"job_id": job_id})
-    if not job:
+    # Atomically increment completed_chunks
+    result = await db.db.jobs.find_one_and_update(
+        {"job_id": job_id},
+        {"$inc": {"completed_chunks": 1}},
+        return_document=True
+    )
+    if not result:
         raise HTTPException(status_code=404, detail="Job not found")
         
-    increment = max(1, int(100 / req.total_chunks))
+    completed = result.get("completed_chunks", 1)
+    total = result.get("total_chunks") or req.total_chunks or 1
     
-    # Calculate new progress
-    current_progress = job.get("progress", 0)
-    new_progress = min(100, current_progress + increment)
+    # Calculate new progress accurately
+    new_progress = min(100, int(round((completed / total) * 100)))
     
     update_data = {"progress": new_progress}
-    if new_progress >= 100:
+    if completed >= total or new_progress >= 100:
+        new_progress = 100
+        update_data["progress"] = 100
         update_data["status"] = "completed"
-        await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All chunks completed. Job finished at 100%.")
+        await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {total} chunks completed. Job finished at 100%.")
         
     await db.db.jobs.update_one(
         {"job_id": job_id},

@@ -19,7 +19,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
   const [copied, setCopied] = useState(false);
   const [events, setEvents] = useState<EventLog[]>([]);
   const lastTimestampRef = useRef<string | null>(null);
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalLogsRef = useRef<HTMLDivElement>(null);
 
   // Poll job status
   useEffect(() => {
@@ -60,9 +60,11 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
     return () => clearInterval(interval);
   }, [resolvedParams.id]);
 
-  // Auto-scroll terminal
+  // Auto-scroll terminal internally (prevents page expansion)
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (terminalLogsRef.current) {
+      terminalLogsRef.current.scrollTop = terminalLogsRef.current.scrollHeight;
+    }
   }, [events]);
 
   const dockerCommand = `docker run --rm --gpus all -e POOL_ID="${job?.pool_id || "public_pool"}" daemon-worker`;
@@ -85,10 +87,10 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-140px)]">
+    <div className="flex flex-col md:flex-row gap-6 md:h-[calc(100vh-140px)] md:max-h-[calc(100vh-140px)]">
       
       {/* Left Column: Details & Instructions */}
-      <div className="w-full md:w-1/2 flex flex-col gap-6 overflow-y-auto">
+      <div className="w-full md:w-1/2 flex flex-col gap-6 overflow-y-auto custom-scrollbar md:h-full pr-1">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-0">
@@ -177,8 +179,8 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Right Column: Live Terminal Feed */}
-      <div className="w-full md:w-1/2 min-h-[400px] md:min-h-0 bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl">
-        <div className="bg-[#1a1a1a] border-b border-[#333] px-4 py-2 flex items-center gap-3">
+      <div className="w-full md:w-1/2 h-[520px] md:h-full bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl shrink-0">
+        <div className="bg-[#1a1a1a] border-b border-[#333] px-4 py-2.5 flex items-center gap-3 shrink-0">
           <div className="flex gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-error-crimson"></div>
             <div className="w-2.5 h-2.5 rounded-full bg-surface-tint"></div>
@@ -188,7 +190,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
           <span className="ml-auto font-mono text-[10px] text-gray-600">{events.length} events</span>
         </div>
         
-        <div className="p-4 flex-grow overflow-y-auto font-mono text-xs custom-scrollbar">
+        <div ref={terminalLogsRef} className="p-4 flex-1 min-h-0 overflow-y-auto font-mono text-xs custom-scrollbar">
           {events.length === 0 && (
             <div className="text-gray-500 mb-2">Waiting for worker events...</div>
           )}
@@ -203,7 +205,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
               </div>
             );
           })}
-          <div ref={terminalEndRef} className="mt-2 text-gray-500 animate-pulse">_</div>
+          <div className="mt-2 text-gray-500 animate-pulse">_</div>
         </div>
       </div>
 

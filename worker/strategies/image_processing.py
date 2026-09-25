@@ -1,6 +1,7 @@
 import logging
 import os
 import zipfile
+import tempfile
 import numpy as np
 from PIL import Image
 import time
@@ -98,21 +99,29 @@ class ImageProcessingStrategy:
         bucket = parts[0]
         object_name = parts[1]
         
-        # 2. Download the ZIP file
-        local_zip_path = f"/tmp/{job_id}_payload.zip"
+        # 2. Download the ZIP file using cross-platform temp directory
+        temp_dir = os.path.join(tempfile.gettempdir(), "daemon_worker")
+        os.makedirs(temp_dir, exist_ok=True)
+        local_zip_path = os.path.join(temp_dir, f"{job_id}_payload.zip")
         downloaded = storage.download_data(bucket, object_name, local_zip_path)
         if not downloaded:
             raise Exception("Failed to download payload from MinIO")
             
         # 3. Extract the target image based on chunk_index
-        extract_dir = f"/tmp/{task_id}_extract"
+        extract_dir = os.path.join(temp_dir, f"{task_id}_extract")
         os.makedirs(extract_dir, exist_ok=True)
         
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
         with zipfile.ZipFile(local_zip_path, 'r') as zf:
-            all_files = [f for f in zf.namelist() if not f.endswith('/')]
+            all_files = [
+                f for f in zf.namelist() 
+                if not f.endswith('/') 
+                and f.lower().endswith(valid_extensions)
+                and not os.path.basename(f).startswith('.')
+            ]
             
             if not all_files:
-                raise Exception("No files found in the uploaded ZIP payload.")
+                raise Exception("No valid image files (.jpg, .png, etc.) found in the uploaded ZIP payload.")
                 
             target_image_name = all_files[chunk_index % len(all_files)]
             zf.extract(target_image_name, extract_dir)

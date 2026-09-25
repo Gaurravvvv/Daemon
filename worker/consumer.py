@@ -17,6 +17,7 @@ class TaskConsumer:
         self.orchestrator_url = orchestrator_url
         self.worker_id = f"NODE-{uuid.uuid4().hex[:6].upper()}"
         self.gpu_info = gpu_info or {"has_gpu": False}
+        self.announced_jobs = set()
         self.connection = None
         self.channel = None
 
@@ -79,10 +80,20 @@ class TaskConsumer:
             
             logger.info(f"Received task: {task_id} (job: {job_id}, compute: {compute_mode})")
             
+            # Announce worker connection to this job's live feed if not yet announced
+            if job_id != 'unknown' and job_id not in self.announced_jobs:
+                self.announced_jobs.add(job_id)
+                if self.gpu_info.get("has_gpu"):
+                    hw_tag = f"[GPU: {self.gpu_info.get('device_name', 'CUDA')} ({self.gpu_info.get('vram_gb', '?')}GB)]"
+                else:
+                    hw_tag = "[CPU MODE]"
+                self._emit(job_id, "SYSTEM", f"{self.worker_id} connected to pool '{self.pool_id}' {hw_tag}")
+
             # ── Compute Mode Gate ──
             if not self._check_compute_eligibility(task_payload):
                 logger.info(f"Task {task_id} requires GPU but this worker has no GPU. Requeuing...")
                 self._emit(job_id, "WARNING", f"{self.worker_id} skipped chunk {chunk_index + 1} — requires GPU, this node is CPU-only. Requeued.")
+                time.sleep(2)  # Backoff delay to prevent tight CPU thrashing
                 # NACK + requeue so a GPU worker can pick it up
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 return

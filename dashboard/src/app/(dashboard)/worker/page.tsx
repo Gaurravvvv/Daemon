@@ -8,6 +8,8 @@ export default function WorkerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [jobs, setJobs] = useState<any[]>([]);
   
+  const [poolFilter, setPoolFilter] = useState<"public" | "private">("public");
+  const [clusterIdInput, setClusterIdInput] = useState("private_cluster_01");
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -30,12 +32,23 @@ export default function WorkerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const filteredJobs = jobs.filter(job => 
-    job?.status === "processing" && (
-      (job?.job_name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) || 
-      (job?.job_id?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-    )
-  );
+  const filteredJobs = jobs.filter(job => {
+    if (job?.status !== "processing") return false;
+
+    // Check pool isolation:
+    if (poolFilter === "public") {
+      // Only show jobs meant for public_pool
+      if (job?.pool_id && job.pool_id !== "public_pool") return false;
+    } else {
+      // In private cluster mode, only show jobs for the targeted cluster
+      if (!clusterIdInput.trim()) return false;
+      if (job?.pool_id?.toLowerCase() !== clusterIdInput.trim().toLowerCase()) return false;
+    }
+
+    const nameMatch = (job?.job_name?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+    const idMatch = (job?.job_id?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+    return nameMatch || idMatch;
+  });
 
   const handleJobClick = (job: any) => {
     if (job.requires_password) {
@@ -117,10 +130,17 @@ export default function WorkerDashboard() {
         </div>
       )}
 
-      <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-sans text-primary mb-1">Global Compute Pool</h1>
-          <p className="text-sm font-sans text-secondary">Search and join any available compute task across the grid.</p>
+          <h1 className="text-2xl font-bold font-sans text-primary mb-1">
+            {poolFilter === "public" ? "Global Compute Pool" : "Private Cluster Gateway"}
+          </h1>
+          <p className="text-sm font-sans text-secondary">
+            {poolFilter === "public" 
+              ? "Search and join public compute tasks donated to the open grid." 
+              : "Isolated enterprise tasks partitioned into dedicated private clusters."}
+          </p>
         </div>
         
         <div className="relative w-full md:w-72">
@@ -135,9 +155,56 @@ export default function WorkerDashboard() {
         </div>
       </div>
 
+      {/* Pool Switcher Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-8 border-b border-border-base pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPoolFilter("public")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 font-mono text-xs uppercase rounded transition-colors ${
+              poolFilter === "public"
+                ? "bg-primary text-on-primary font-bold shadow-sm"
+                : "text-secondary hover:text-primary hover:bg-surface-container"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">public</span>
+            Global Pool (Public)
+          </button>
+
+          <button
+            onClick={() => setPoolFilter("private")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 font-mono text-xs uppercase rounded transition-colors ${
+              poolFilter === "private"
+                ? "bg-primary text-on-primary font-bold shadow-sm"
+                : "text-secondary hover:text-primary hover:bg-surface-container"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">lock</span>
+            Private Clusters
+          </button>
+        </div>
+
+        {poolFilter === "private" && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="font-mono text-xs text-secondary uppercase whitespace-nowrap">Target Cluster:</span>
+            <input
+              type="text"
+              value={clusterIdInput}
+              onChange={(e) => setClusterIdInput(e.target.value)}
+              placeholder="e.g. private_cluster_01"
+              className="bg-surface border border-border-base rounded px-3 py-1 font-mono text-xs text-primary focus:outline-none focus:border-primary w-full sm:w-56"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Job Grid */}
       {filteredJobs.length === 0 ? (
-        <div className="mt-12 text-center text-secondary font-mono text-xs">
-          No compute jobs found.
+        <div className="mt-12 text-center text-secondary font-mono text-xs p-8 border border-dashed border-border-base rounded">
+          {poolFilter === "public" ? (
+            <p>No active public jobs found in the global pool.</p>
+          ) : (
+            <p>No active jobs found for cluster ID <span className="text-primary font-bold">"{clusterIdInput}"</span>. Ensure the cluster alias matches your target deployment.</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
@@ -151,6 +218,9 @@ export default function WorkerDashboard() {
                 <span className="font-mono text-sm font-bold text-primary px-2 py-1 bg-surface rounded">#{job.job_id.substring(0, 12)}</span>
                 
                 <div className="flex gap-2 items-center">
+                  <span className="font-mono text-[10px] text-secondary border border-border-base px-2 py-0.5 rounded bg-surface-container">
+                    {job.pool_id || "public_pool"}
+                  </span>
                   {job.requires_password && (
                     <span className="material-symbols-outlined text-secondary text-[14px]" title="Password Required">lock</span>
                   )}
@@ -167,7 +237,7 @@ export default function WorkerDashboard() {
                 </div>
                 <div className="flex items-center gap-1.5 text-secondary">
                   <span className="material-symbols-outlined text-[16px]">grid_on</span>
-                  Chunks
+                  {job.total_chunks || 10} Chunks
                 </div>
               </div>
             </div>

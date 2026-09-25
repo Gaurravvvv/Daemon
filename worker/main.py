@@ -69,6 +69,31 @@ def main():
     
     logger.info(f"Worker ID: {consumer.worker_id}")
     
+    # Register worker with Orchestrator
+    try:
+        capabilities = ["math", "crypto"]
+        if gpu_info["has_gpu"]:
+            capabilities.extend(["image", "gpu"])
+        else:
+            capabilities.append("image")
+            
+        reg_payload = {
+            "worker_id": consumer.worker_id,
+            "pool_id": pool_id,
+            "capabilities": capabilities,
+            "system_info": {
+                "has_gpu": gpu_info["has_gpu"],
+                "gpu_name": gpu_info.get("device_name", "None"),
+                "vram_gb": gpu_info.get("vram_gb", 0),
+                "platform": sys.platform
+            }
+        }
+        reg_res = requests.post(f"{orchestrator_url}/api/v1/workers/register", json=reg_payload, timeout=5)
+        if reg_res.ok:
+            logger.info(f"Successfully registered node {consumer.worker_id} with Orchestrator.")
+    except Exception as e:
+        logger.warning(f"Could not register worker with Orchestrator: {e}")
+    
     # Build join message with hardware info
     if gpu_info["has_gpu"]:
         hw_tag = f"[GPU: {gpu_info['device_name']} ({gpu_info['vram_gb']}GB VRAM)]"
