@@ -16,7 +16,6 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
   const router = useRouter();
   const resolvedParams = use(params);
   const [job, setJob] = useState<any>(null);
-  const [showWorkers, setShowWorkers] = useState(false);
   const [events, setEvents] = useState<EventLog[]>([]);
   const lastTimestampRef = useRef<string | null>(null);
   const terminalLogsRef = useRef<HTMLDivElement>(null);
@@ -72,7 +71,7 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
     return () => clearInterval(interval);
   }, [resolvedParams.id]);
 
-  // Auto-scroll terminal internally (prevents page expansion)
+  // Auto-scroll terminal internally
   useEffect(() => {
     if (terminalLogsRef.current) {
       terminalLogsRef.current.scrollTop = terminalLogsRef.current.scrollHeight;
@@ -81,8 +80,9 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
 
   if (!job) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="h-64 flex flex-col items-center justify-center gap-3">
         <span className="material-symbols-outlined text-4xl text-primary animate-spin">sync</span>
+        <span className="micro-label text-secondary">Connecting to Orchestrator Node...</span>
       </div>
     );
   }
@@ -90,11 +90,11 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
   const getLogColor = (level: string) => {
     switch (level) {
       case "SUCCESS": return "text-success-emerald";
-      case "WARNING": return "text-amber-500";
+      case "WARNING": return "text-amber-400";
       case "ERROR": return "text-error-crimson";
-      case "SYSTEM": return "text-blue-400";
-      case "INFO": return "text-purple-400";
-      default: return "text-gray-300";
+      case "SYSTEM": return "text-primary";
+      case "INFO": return "text-secondary";
+      default: return "text-foreground";
     }
   };
 
@@ -102,86 +102,103 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
     <div className="flex flex-col md:flex-row gap-6 md:h-[calc(100vh-140px)] md:max-h-[calc(100vh-140px)]">
       
       {/* Left Column: Metrics & Controls */}
-      <div className="w-full md:w-1/2 flex flex-col gap-6 overflow-y-auto custom-scrollbar md:h-full pr-1">
+      <div className="w-full md:w-1/2 flex flex-col gap-5 overflow-y-auto custom-scrollbar md:h-full pr-1">
         
         {/* Header */}
         <div>
-          <Link href="/orchestrator" className="text-secondary hover:text-primary font-mono text-xs uppercase flex items-center gap-1 mb-4">
-            <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+          <Link href="/orchestrator" className="text-secondary hover:text-primary micro-label flex items-center gap-1.5 mb-3 transition-colors">
+            <span className="material-symbols-outlined text-[15px]">arrow_back</span>
             Back to Jobs
           </Link>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold font-sans text-primary">Job #{resolvedParams.id}</h1>
-            <span className={`px-2 py-0.5 rounded text-xs font-mono uppercase border ${
-              job.status === 'completed' ? 'bg-success-emerald/10 text-success-emerald border-success-emerald/20' :
-              job.status === 'halted' ? 'bg-error-crimson/10 text-error-crimson border-error-crimson/20' :
-              job.status === 'processing' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-              'bg-surface-tint/10 text-surface-tint border-surface-tint/20'
-            }`}>{job.status}</span>
+          <div className="flex flex-wrap items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold title-tight text-primary">Job #{resolvedParams.id.substring(0, 14)}</h1>
+            <span className={`ide-chip ${
+              job.status === 'completed' ? 'border-success-emerald/40 text-success-emerald bg-success-emerald/5' :
+              job.status === 'halted' ? 'border-error-crimson/40 text-error-crimson bg-error-crimson/5' :
+              job.status === 'processing' ? 'border-primary/40 text-primary bg-primary/5' :
+              'border-border-base text-secondary'
+            }`}>
+              <span className={job.status === 'processing' ? 'active-dot' : 'w-1.5 h-1.5 rounded-full bg-border-base'}></span>
+              {job.status.toUpperCase()}
+            </span>
           </div>
-          <p className="text-sm font-mono text-secondary">{job.job_name || 'Unnamed Job'}</p>
+          <p className="text-sm font-sans text-secondary">{job.job_name || 'Unnamed Compute Job'}</p>
         </div>
 
         {/* Big Metrics Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Total Progress</span>
-            <span className="text-3xl font-bold font-sans text-primary">{job?.progress || 0}<span className="text-lg text-secondary">%</span></span>
-            <div className="w-full bg-surface-container h-1 mt-2">
-              <div className="bg-success-emerald h-1 transition-all duration-500" style={{ width: `${job?.progress || 0}%` }}></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="card-interactive bg-surface border border-border-base p-4 rounded-[12px] flex flex-col justify-between shadow-sm col-span-2">
+            <div className="flex justify-between items-center mb-1">
+              <span className="micro-label text-secondary">Cluster Progress</span>
+              <span className="kpi-numeral text-2xl text-primary">{job?.progress || 0}%</span>
+            </div>
+            <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden border border-border-base/40 mt-1">
+              <div 
+                className="bg-success-emerald h-full transition-all duration-500 rounded-full" 
+                style={{ width: `${job?.progress || 0}%` }}
+              ></div>
             </div>
           </div>
           
-          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Job Alias</span>
-            <span className="text-xl font-bold font-sans text-primary mt-1">{job?.job_name || "Unknown"}</span>
+          <div className="card-interactive bg-surface border border-border-base p-4 rounded-[12px] flex flex-col shadow-sm">
+            <span className="micro-label text-secondary mb-1">Strategy Type</span>
+            <span className="ide-chip mt-1 self-start uppercase font-bold text-primary">
+              {job?.job_type || "Compute"}
+            </span>
           </div>
           
-          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Strategy Type</span>
-            <span className="text-xl font-bold font-sans text-primary mt-1">{job?.job_type || "Compute"}</span>
-          </div>
-          
-          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Target Pool</span>
-            <span className="text-xl font-bold font-sans text-primary mt-1">{job?.pool_id || "public_pool"}</span>
+          <div className="card-interactive bg-surface border border-border-base p-4 rounded-[12px] flex flex-col shadow-sm">
+            <span className="micro-label text-secondary mb-1">Target Pool</span>
+            <span className="ide-chip mt-1 self-start font-mono text-secondary">
+              {job?.pool_id || "public_pool"}
+            </span>
           </div>
 
-          <div className="bg-surface border border-border-base p-4 rounded-sm flex flex-col">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest mb-1">Compute Mode</span>
-            <span className={`text-xl font-bold font-sans mt-1 ${
-              job?.compute_mode === 'gpu_only' ? 'text-amber-400' :
-              job?.compute_mode === 'cpu_only' ? 'text-blue-400' :
-              'text-success-emerald'
+          <div className="card-interactive bg-surface border border-border-base p-4 rounded-[12px] flex flex-col shadow-sm">
+            <span className="micro-label text-secondary mb-1">Compute Mode</span>
+            <span className={`ide-chip mt-1 self-start ${
+              job?.compute_mode === 'gpu_only' ? 'border-amber-400/40 text-amber-400' :
+              job?.compute_mode === 'cpu_only' ? 'border-blue-400/40 text-blue-400' :
+              'border-success-emerald/40 text-success-emerald'
             }`}>
               {job?.compute_mode === 'gpu_only' ? 'GPU Only' :
                job?.compute_mode === 'cpu_only' ? 'CPU Only' :
-               'Hybrid'}
+               'Hybrid (Any)'}
+            </span>
+          </div>
+
+          <div className="card-interactive bg-surface border border-border-base p-4 rounded-[12px] flex flex-col shadow-sm">
+            <span className="micro-label text-secondary mb-1">Total Partitions</span>
+            <span className="kpi-numeral text-xl text-foreground mt-1">
+              {job?.total_chunks || 10} Chunks
             </span>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="bg-surface border border-border-base rounded-sm overflow-hidden mt-auto">
-          <div className="bg-surface border-b border-border-base px-4 py-3 flex justify-between items-center">
-             <span className="font-mono text-xs uppercase text-primary font-bold">Admin Controls</span>
+        <div className="bg-surface border border-border-base rounded-[16px] overflow-hidden mt-auto shadow-sm">
+          <div className="bg-surface-container border-b border-border-base px-4 py-3 flex justify-between items-center">
+             <span className="micro-label text-foreground font-bold flex items-center gap-2">
+               <span className="material-symbols-outlined text-[16px] text-primary">tune</span>
+               Admin Orchestration Controls
+             </span>
           </div>
           <div className="p-4 flex flex-wrap gap-3">
             <button 
               onClick={handleHalt}
               disabled={job.status === "halted" || job.status === "completed"}
-              className="px-4 py-2 bg-error-crimson/10 text-error-crimson border border-error-crimson/30 hover:bg-error-crimson hover:text-on-error transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-interactive px-4 py-2 bg-error-crimson/10 text-error-crimson border border-error-crimson/30 hover:bg-error-crimson hover:text-white micro-label rounded-[8px] flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               <span className="material-symbols-outlined text-[16px]">stop_circle</span>
-              {job.status === "halted" ? "Halted" : "Halt Entire Task"}
+              {job.status === "halted" ? "Job Halted" : "Halt Entire Job"}
             </button>
             {job.status === "completed" && (
               <a
                 href={`http://127.0.0.1:8000/api/v1/jobs/${resolvedParams.id}/download`}
-                className="px-4 py-2 bg-success-emerald/10 text-success-emerald border border-success-emerald/30 hover:bg-success-emerald hover:text-on-primary transition-colors font-mono text-xs uppercase rounded-sm flex items-center gap-2"
+                className="btn-interactive px-4 py-2 bg-success-emerald/10 text-success-emerald border border-success-emerald/30 hover:bg-success-emerald hover:text-on-primary micro-label rounded-[8px] flex items-center gap-2 transition-all shadow-sm"
               >
                 <span className="material-symbols-outlined text-[16px]">download</span>
-                Download Results
+                Download Output Artifacts
               </a>
             )}
           </div>
@@ -190,33 +207,39 @@ export default function OrchestratorJobDetails({ params }: { params: Promise<{ i
       </div>
 
       {/* Right Column: Live Terminal Feed */}
-      <div className="w-full md:w-1/2 h-[520px] md:h-full bg-[#0a0a0a] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-2xl shrink-0">
-        <div className="bg-[#1a1a1a] border-b border-[#333] px-4 py-2.5 flex items-center gap-3 shrink-0">
+      <div className="w-full md:w-1/2 h-[520px] md:h-full bg-surface border border-border-base rounded-[16px] flex flex-col overflow-hidden shadow-xl shrink-0">
+        <div className="bg-surface-container border-b border-border-base px-4 py-3 flex items-center gap-3 shrink-0">
           <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-error-crimson"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-surface-tint"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-success-emerald"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-error-crimson/80 border border-error-crimson"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400/80 border border-amber-400"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-success-emerald/80 border border-success-emerald"></div>
           </div>
-          <span className="font-mono text-[10px] text-gray-400 uppercase tracking-widest ml-4">Live Orchestrator Feed</span>
-          <span className="ml-auto font-mono text-[10px] text-gray-600">{events.length} events</span>
+          <span className="micro-label text-secondary ml-3">Live Orchestrator Event Stream</span>
+          <span className="ml-auto ide-chip text-[10px] text-secondary">{events.length} events</span>
         </div>
         
-        <div ref={terminalLogsRef} className="p-4 flex-1 min-h-0 overflow-y-auto font-mono text-xs custom-scrollbar">
+        <div ref={terminalLogsRef} className="p-4 flex-1 min-h-0 overflow-y-auto font-mono text-xs custom-scrollbar bg-bg-subtle">
           {events.length === 0 && (
-            <div className="text-gray-500 mb-2">Waiting for events...</div>
+            <div className="text-secondary/70 py-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+              Awaiting worker event signals...
+            </div>
           )}
           {events.map((evt, idx) => {
             const time = new Date(evt.timestamp).toLocaleTimeString();
             return (
-              <div key={idx} className="mb-1.5 flex gap-3">
-                <span className="text-gray-600 select-none shrink-0">{time}</span>
+              <div key={idx} className="mb-2 flex items-start gap-2.5 leading-relaxed">
+                <span className="text-secondary/60 select-none shrink-0 text-[11px] font-mono">[{time}]</span>
+                <span className="ide-chip text-[10px] py-0 px-1.5 shrink-0 border-border-base">
+                  {evt.source}
+                </span>
                 <span className={`${getLogColor(evt.level)} break-all`}>
-                  [{evt.source}] {evt.message}
+                  {evt.message}
                 </span>
               </div>
             );
           })}
-          <div className="mt-2 text-gray-500 animate-pulse">_</div>
+          <div className="mt-2 text-primary font-bold animate-pulse">▋</div>
         </div>
       </div>
 

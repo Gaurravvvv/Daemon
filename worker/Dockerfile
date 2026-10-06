@@ -23,7 +23,7 @@ COPY . .
 # Environment variables that volunteers can pass via docker run
 ENV ORCHESTRATOR_URL="http://host.docker.internal:8000"
 ENV RABBITMQ_URL="amqp://guest:guest@host.docker.internal:5672/"
-ENV MINIO_URL="http://host.docker.internal:9000"
+ENV MINIO_URL="http://host.docker.internal:9090"
 ENV POOL_ID="public_pool"
 
 # Start the worker

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class MinioStorage:
     def __init__(self):
         # Allow connecting without credentials if necessary, but use defaults from our Phase 1 setup
-        endpoint = os.environ.get("MINIO_URL", "http://localhost:9000")
+        endpoint = os.environ.get("MINIO_URL", "http://localhost:9090")
         access_key = os.environ.get("MINIO_ACCESS_KEY", "Gaurav")
         secret_key = os.environ.get("MINIO_SECRET_KEY", "password123")
         

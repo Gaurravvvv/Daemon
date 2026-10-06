@@ -22,13 +22,11 @@ export default function WorkerDashboard() {
         const data = await res.json();
         setJobs(data.jobs || []);
       } catch (e) {
-        // Backend is offline, ignore gracefully instead of throwing console.error
-        // which triggers Next.js red error overlay
         setJobs([]);
       }
     };
     fetchJobs();
-    const interval = setInterval(fetchJobs, 2000);
+    const interval = setInterval(fetchJobs, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -37,10 +35,8 @@ export default function WorkerDashboard() {
 
     // Check pool isolation:
     if (poolFilter === "public") {
-      // Only show jobs meant for public_pool
       if (job?.pool_id && job.pool_id !== "public_pool") return false;
     } else {
-      // In private cluster mode, only show jobs for the targeted cluster
       if (!clusterIdInput.trim()) return false;
       if (job?.pool_id?.toLowerCase() !== clusterIdInput.trim().toLowerCase()) return false;
     }
@@ -77,7 +73,7 @@ export default function WorkerDashboard() {
       if (res.ok) {
         router.push(`/worker/job/${selectedJob.job_id}`);
       } else {
-        setPasswordError("Incorrect password. Access denied.");
+        setPasswordError("Incorrect passkey. Access denied.");
         setIsVerifying(false);
       }
     } catch (e) {
@@ -90,39 +86,49 @@ export default function WorkerDashboard() {
     <>
       {/* Password Modal */}
       {selectedJob && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-surface border border-border-base w-full max-w-sm shadow-2xl rounded-sm">
-            <div className="border-b border-border-base px-6 py-4 flex justify-between items-center bg-surface">
-              <h2 className="font-mono text-sm font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                <span className="material-symbols-outlined text-[16px]">lock</span>
-                Protected Task
-              </h2>
-              <button onClick={() => setSelectedJob(null)} className="text-secondary hover:text-error-crimson">
-                <span className="material-symbols-outlined text-sm">close</span>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
+          <div className="bg-surface border border-border-base w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="border-b border-border-base px-6 py-4 flex justify-between items-center bg-surface-container">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-primary">lock</span>
+                <h2 className="micro-label font-bold text-primary">Protected Task Access</h2>
+              </div>
+              <button onClick={() => setSelectedJob(null)} className="text-secondary hover:text-error-crimson p-1 rounded-[6px]">
+                <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
             
             <form onSubmit={handleVerifyPassword} className="p-6 space-y-4">
               <div>
-                <label className="font-mono text-xs font-semibold text-secondary uppercase block mb-1.5">Access Password</label>
+                <label className="micro-label text-secondary block mb-1.5">Cluster Passkey</label>
                 <input 
                   autoFocus
                   required 
                   type="password" 
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-sm" 
-                  placeholder="Enter orchestrator pass..." 
+                  className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px]" 
+                  placeholder="Enter orchestrator passkey..." 
                 />
                 {passwordError && (
-                  <p className="text-error-crimson text-[10px] font-mono mt-2">{passwordError}</p>
+                  <p className="text-error-crimson text-[11px] font-mono mt-2">{passwordError}</p>
                 )}
               </div>
               
-              <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setSelectedJob(null)} className="px-4 py-2 text-sm font-mono uppercase text-secondary hover:bg-surface-container transition-colors rounded-sm border border-transparent">Cancel</button>
-                <button disabled={isVerifying} type="submit" className="px-6 py-2 text-sm font-mono uppercase bg-primary text-on-primary hover:opacity-90 transition-opacity rounded-sm border border-primary flex items-center gap-2">
-                  {isVerifying ? "Verifying..." : "Enter Task"}
+              <div className="pt-3 border-t border-border-base flex justify-end gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedJob(null)} 
+                  className="px-4 py-2 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[8px]"
+                >
+                  Cancel
+                </button>
+                <button 
+                  disabled={isVerifying} 
+                  type="submit" 
+                  className="btn-interactive px-5 py-2 text-xs micro-label bg-primary text-on-primary font-bold rounded-[8px] border border-primary flex items-center gap-2"
+                >
+                  {isVerifying ? "Verifying..." : "Authenticate"}
                 </button>
               </div>
             </form>
@@ -131,67 +137,67 @@ export default function WorkerDashboard() {
       )}
 
       {/* Header */}
-      <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2">
         <div>
-          <h1 className="text-2xl font-bold font-sans text-primary mb-1">
+          <h1 className="text-3xl font-bold title-tight text-primary mb-1">
             {poolFilter === "public" ? "Global Compute Pool" : "Private Cluster Gateway"}
           </h1>
           <p className="text-sm font-sans text-secondary">
             {poolFilter === "public" 
-              ? "Search and join public compute tasks donated to the open grid." 
-              : "Isolated enterprise tasks partitioned into dedicated private clusters."}
+              ? "Discover and claim public compute workloads donated to the decentralized grid." 
+              : "Isolated enterprise workloads partitioned into dedicated private cluster pools."}
           </p>
         </div>
         
-        <div className="relative w-full md:w-72">
-          <span className="material-symbols-outlined absolute left-3 top-2 text-secondary text-[18px]">search</span>
+        <div className="relative w-full md:w-80">
+          <span className="material-symbols-outlined absolute left-3 top-2.5 text-secondary text-[16px]">search</span>
           <input 
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface border border-border-base rounded-sm py-2 pl-9 pr-3 text-sm font-mono focus:outline-none focus:border-primary" 
-            placeholder="Search Job ID or Name..." 
+            className="w-full bg-surface border border-border-base rounded-[8px] py-2 pl-9 pr-3 text-sm font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" 
+            placeholder="Search Job ID or Alias..." 
           />
         </div>
       </div>
 
       {/* Pool Switcher Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-8 border-b border-border-base pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border-base">
+        <div className="flex items-center gap-2 bg-surface-container p-1 rounded-[10px] border border-border-base">
           <button
             onClick={() => setPoolFilter("public")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 font-mono text-xs uppercase rounded transition-colors ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 micro-label rounded-[6px] transition-all ${
               poolFilter === "public"
                 ? "bg-primary text-on-primary font-bold shadow-sm"
-                : "text-secondary hover:text-primary hover:bg-surface-container"
+                : "text-secondary hover:text-primary hover:bg-surface"
             }`}
           >
-            <span className="material-symbols-outlined text-[16px]">public</span>
+            <span className="material-symbols-outlined text-[14px]">public</span>
             Global Pool (Public)
           </button>
 
           <button
             onClick={() => setPoolFilter("private")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 font-mono text-xs uppercase rounded transition-colors ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 micro-label rounded-[6px] transition-all ${
               poolFilter === "private"
                 ? "bg-primary text-on-primary font-bold shadow-sm"
-                : "text-secondary hover:text-primary hover:bg-surface-container"
+                : "text-secondary hover:text-primary hover:bg-surface"
             }`}
           >
-            <span className="material-symbols-outlined text-[16px]">lock</span>
+            <span className="material-symbols-outlined text-[14px]">lock</span>
             Private Clusters
           </button>
         </div>
 
         {poolFilter === "private" && (
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="font-mono text-xs text-secondary uppercase whitespace-nowrap">Target Cluster:</span>
+            <span className="micro-label text-secondary whitespace-nowrap">Target Cluster:</span>
             <input
               type="text"
               value={clusterIdInput}
               onChange={(e) => setClusterIdInput(e.target.value)}
               placeholder="e.g. private_cluster_01"
-              className="bg-surface border border-border-base rounded px-3 py-1 font-mono text-xs text-primary focus:outline-none focus:border-primary w-full sm:w-56"
+              className="bg-surface border border-border-base rounded-[6px] px-3 py-1.5 font-mono text-xs text-primary focus:outline-none focus:border-primary w-full sm:w-60"
             />
           </div>
         )}
@@ -199,45 +205,58 @@ export default function WorkerDashboard() {
 
       {/* Job Grid */}
       {filteredJobs.length === 0 ? (
-        <div className="mt-12 text-center text-secondary font-mono text-xs p-8 border border-dashed border-border-base rounded">
+        <div className="mt-8 text-center text-secondary font-mono text-xs p-12 border border-dashed border-border-base rounded-[16px] bg-surface/50">
+          <span className="material-symbols-outlined text-4xl mb-2 text-secondary/40 block">cloud_sync</span>
           {poolFilter === "public" ? (
-            <p>No active public jobs found in the global pool.</p>
+            <p>No active public jobs found in the global pool. Waiting for orchestrator dispatches...</p>
           ) : (
-            <p>No active jobs found for cluster ID <span className="text-primary font-bold">"{clusterIdInput}"</span>. Ensure the cluster alias matches your target deployment.</p>
+            <p>No active jobs found for cluster <span className="text-primary font-bold">"{clusterIdInput}"</span>. Ensure worker pool configuration matches target.</p>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredJobs.map(job => (
             <div 
               key={job.job_id} 
               onClick={() => handleJobClick(job)}
-              className="cursor-pointer bg-surface border border-border-base rounded-sm p-5 hover:border-primary transition-colors group flex flex-col relative"
+              className="card-interactive cursor-pointer bg-surface border border-border-base rounded-[16px] p-5 hover:border-primary flex flex-col relative shadow-sm group"
             >
-              <div className="flex justify-between items-start mb-4">
-                <span className="font-mono text-sm font-bold text-primary px-2 py-1 bg-surface rounded">#{job.job_id.substring(0, 12)}</span>
+              <div className="flex justify-between items-start mb-3">
+                <span className="ide-chip font-bold text-primary border-primary/30 group-hover:border-primary">
+                  #{job.job_id.substring(0, 10)}
+                </span>
                 
                 <div className="flex gap-2 items-center">
-                  <span className="font-mono text-[10px] text-secondary border border-border-base px-2 py-0.5 rounded bg-surface-container">
+                  <span className="ide-chip text-[10px] text-secondary">
                     {job.pool_id || "public_pool"}
                   </span>
                   {job.requires_password && (
-                    <span className="material-symbols-outlined text-secondary text-[14px]" title="Password Required">lock</span>
+                    <span className="material-symbols-outlined text-secondary text-[14px]" title="Password Protected">lock</span>
                   )}
-                  <span className="font-mono text-[10px] text-success-emerald uppercase tracking-wider bg-success-emerald/10 px-2 py-1 rounded">Open</span>
+                  <span className="ide-chip border-success-emerald/30 text-success-emerald text-[10px] bg-success-emerald/5">
+                    <span className="active-dot"></span>
+                    ACTIVE
+                  </span>
                 </div>
               </div>
-              <h3 className="font-sans font-bold text-base mb-1 text-primary pr-6">{job.job_name}</h3>
-              <span className="font-mono text-xs text-secondary mb-6">{job.job_type}</span>
               
-              <div className="mt-auto pt-4 border-t border-border-base flex justify-between items-center text-sm font-sans">
-                <div className="flex items-center gap-1.5 text-secondary">
-                  <span className="material-symbols-outlined text-[16px]">database</span>
-                  {job.progress}%
+              <h3 className="font-sans font-bold text-base mb-1 text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                {job.job_name}
+              </h3>
+              <div className="mb-6">
+                <span className="ide-chip text-[10px] uppercase text-secondary">
+                  {job.job_type}
+                </span>
+              </div>
+              
+              <div className="mt-auto pt-4 border-t border-border-base/70 flex justify-between items-center text-xs font-mono text-secondary">
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[15px] text-primary">data_usage</span>
+                  <span>{job.progress || 0}% Complete</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-secondary">
-                  <span className="material-symbols-outlined text-[16px]">grid_on</span>
-                  {job.total_chunks || 10} Chunks
+                <div className="flex items-center gap-1.5 ide-chip text-[10px]">
+                  <span className="material-symbols-outlined text-[14px]">grid_view</span>
+                  <span>{job.total_chunks || 10} Chunks</span>
                 </div>
               </div>
             </div>

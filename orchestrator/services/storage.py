@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class MinioStorage:
     def __init__(self):
-        self.endpoint = os.environ.get("MINIO_URL", "http://localhost:9000")
+        self.endpoint = os.environ.get("MINIO_URL", "http://localhost:9090")
         self.access_key = os.environ.get("MINIO_ACCESS_KEY", "Gaurav")
         self.secret_key = os.environ.get("MINIO_SECRET_KEY", "password123")
         self.bucket_name = "daemon-jobs"
