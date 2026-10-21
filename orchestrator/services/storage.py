@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class MinioStorage:
     def __init__(self):
-        self.endpoint = os.environ.get("MINIO_URL", "http://localhost:9000")
+        self.endpoint = os.environ.get("MINIO_URL", "http://localhost:9090")
         self.access_key = os.environ.get("MINIO_ACCESS_KEY", "Gaurav")
         self.secret_key = os.environ.get("MINIO_SECRET_KEY", "password123")
         self.bucket_name = "daemon-jobs"
@@ -33,9 +33,12 @@ class MinioStorage:
                 self.s3.create_bucket(Bucket=self.bucket_name)
                 logger.info(f"Bucket {self.bucket_name} created successfully.")
             except Exception as e:
-                logger.error(f"Could not create bucket {self.bucket_name}: {e}")
+                logger.warning(f"Could not create bucket {self.bucket_name}: {e}")
+        except Exception as conn_err:
+            logger.warning(f"Could not reach MinIO to verify bucket ({conn_err}). Will verify on upload.")
 
     async def upload_file(self, file: UploadFile, object_name: str) -> str:
+        self._ensure_bucket_exists()
         try:
             contents = await file.read()
             self.s3.put_object(

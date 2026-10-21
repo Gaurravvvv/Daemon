@@ -1,13 +1,20 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 
 # Virtual environments
 venv/
+**/venv/
+.venv/
+**/.venv/
 env/
+**/env/
 ENV/
 .env
+.env.*
+*.env
 
 # Docker
 .docker/
@@ -22,14 +29,31 @@ docker-compose.override.yml
 # OS generated files
 .DS_Store
 Thumbs.db
+desktop.ini
+ehthumbs.db
 
-# Node.js
+# Node.js & Frontend builds
 node_modules/
-npm-debug.log
-yarn-error.log
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .next/
+**/.next/
 out/
 build/
+*.tsbuildinfo
 
-# MinIO Local Storage
+# Test Datasets & Generated Payloads
+test_data_math/
+test_data_crypto/
+math_payload.zip
+crypto_payload.zip
+*_payload.zip
+
+# Temporary Runtime / Worker Storage
+temp/
+tmp/
+daemon_worker/
 D:/Daemon_Minio_Data/
+survey paper/

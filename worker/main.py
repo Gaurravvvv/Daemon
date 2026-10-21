@@ -13,14 +13,22 @@ logger = logging.getLogger(__name__)
 
 
 def probe_gpu() -> dict:
-    """Detect GPU hardware and return info dict."""
+    """Detect GPU hardware, test kernel execution, and return info dict."""
+    if os.environ.get("FORCE_CPU", "").lower() in ("1", "true", "yes"):
+        return {"has_gpu": False, "reason": "FORCE_CPU environment variable enabled"}
+
     try:
         import cupy as cp  # type: ignore
         device_count = cp.cuda.runtime.getDeviceCount()
         if device_count == 0:
-            return {"has_gpu": False}
+            return {"has_gpu": False, "reason": "No CUDA-capable device detected"}
         
-        props = cp.cuda.runtime.getDeviceProperties(0)
+        device_id = int(os.environ.get("GPU_DEVICE_ID", "0"))
+        if device_id >= device_count:
+            device_id = 0
+        cp.cuda.Device(device_id).use()
+        
+        props = cp.cuda.runtime.getDeviceProperties(device_id)
         device_name = props.get("name", b"Unknown GPU")
         if isinstance(device_name, bytes):
             device_name = device_name.decode("utf-8", errors="replace")
@@ -31,9 +39,17 @@ def probe_gpu() -> dict:
         cuda_ver = cp.cuda.runtime.runtimeGetVersion()
         cuda_major = cuda_ver // 1000
         cuda_minor = (cuda_ver % 1000) // 10
+
+        # Smoke-test active GPU memory allocation & kernel execution
+        test_arr = cp.zeros(2, dtype=cp.float32)
+        test_arr += 1.0
+        cp.cuda.Stream.null.synchronize()
+        del test_arr
+        cp.get_default_memory_pool().free_all_blocks()
         
         return {
             "has_gpu": True,
+            "device_id": device_id,
             "device_name": device_name,
             "vram_gb": vram_gb,
             "cuda_version": f"{cuda_major}.{cuda_minor}",
@@ -42,7 +58,7 @@ def probe_gpu() -> dict:
     except ImportError:
         return {"has_gpu": False, "reason": "CuPy not installed"}
     except Exception as e:
-        return {"has_gpu": False, "reason": str(e)}
+        return {"has_gpu": False, "reason": f"CUDA compute test failed: {e}"}
 
 
 def main():
@@ -68,6 +84,31 @@ def main():
     consumer.connect(rabbitmq_url=rabbitmq_url)
     
     logger.info(f"Worker ID: {consumer.worker_id}")
+    
+    # Register worker with Orchestrator
+    try:
+        capabilities = ["math", "crypto"]
+        if gpu_info["has_gpu"]:
+            capabilities.extend(["image", "gpu"])
+        else:
+            capabilities.append("image")
+            
+        reg_payload = {
+            "worker_id": consumer.worker_id,
+            "pool_id": pool_id,
+            "capabilities": capabilities,
+            "system_info": {
+                "has_gpu": gpu_info["has_gpu"],
+                "gpu_name": gpu_info.get("device_name", "None"),
+                "vram_gb": gpu_info.get("vram_gb", 0),
+                "platform": sys.platform
+            }
+        }
+        reg_res = requests.post(f"{orchestrator_url}/api/v1/workers/register", json=reg_payload, timeout=5)
+        if reg_res.ok:
+            logger.info(f"Successfully registered node {consumer.worker_id} with Orchestrator.")
+    except Exception as e:
+        logger.warning(f"Could not register worker with Orchestrator: {e}")
     
     # Build join message with hardware info
     if gpu_info["has_gpu"]:

@@ -8,11 +8,11 @@ docker-compose up -d
 
 echo.
 echo Starting FastAPI Orchestrator (Backend)...
-start cmd /k "cd orchestrator && .\venv\Scripts\activate.bat && uvicorn main:app --reload --port 8000"
+start "DaeMon Orchestrator" cmd /k "cd orchestrator && .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000"
 
 echo.
 echo Starting Next.js Dashboard (Frontend) on port 5555...
-start cmd /k "cd dashboard && npm run dev -- -p 5555"
+start "DaeMon Dashboard" cmd /k "cd dashboard && npm run dev -- -p 5555"
 
 echo.
 echo Waiting 10 seconds for services to boot up...
