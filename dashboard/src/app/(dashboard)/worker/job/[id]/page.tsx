@@ -67,7 +67,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
     }
   }, [events]);
 
-  const dockerCommand = `docker run --rm --gpus all -e POOL_ID="${job?.pool_id || "public_pool"}" daemon-worker`;
+  const dockerCommand = `docker run --rm -it --gpus all --add-host=host.docker.internal:host-gateway -e POOL_ID="${job?.pool_id || "public_pool"}" daemon-worker`;
 
   const copyCommand = () => {
     navigator.clipboard.writeText(dockerCommand);
