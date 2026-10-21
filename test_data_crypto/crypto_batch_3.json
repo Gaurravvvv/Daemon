@@ -1,0 +1,16 @@
+{
+  "chunk_index": 3,
+  "algorithm": "SHA-256",
+  "keyspace_range": {
+    "start": 300000,
+    "end": 399999
+  },
+  "target_hashes": [
+    "4387238de3d3113d86e024b2bbfac55655bef599065ce59836a0d6e6d1e379f4",
+    "4958473018d97ca5b56137a966cc3270c504a7fe5e08259b6875eedf09568400",
+    "90ca1bcb35d18731b886804cb9c6257ff643d950f3cac87507c3e21456225e01",
+    "16e5f01c6343d656fc3c78b8856c62571e3b0bbc92a20c68646e0759ec6a7e7f",
+    "0e02d570eeb6ba88fe632646a97f68c7b31c629510a16ad0cfd843b9c862252c"
+  ],
+  "difficulty_prefix": "0000"
+}
