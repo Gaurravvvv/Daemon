@@ -133,6 +133,11 @@ class TaskConsumer:
             elapsed = round(time.time() - start_time, 2)
             actual_device = result.get("device", device_tag)
             
+            # If strategy fell back to CPU, dynamically demote worker to avoid claiming further gpu_only jobs
+            if "fallback" in str(actual_device).lower() and self.gpu_info.get("has_gpu"):
+                logger.warning(f"GPU processing failed for {task_id}. Demoting worker {self.worker_id} to CPU mode.")
+                self.gpu_info["has_gpu"] = False
+            
             logger.info(f"Strategy completed for task {task_id}. Result: {result.get('status', 'unknown')}")
             
             # Acknowledge the message (removes it from queue)

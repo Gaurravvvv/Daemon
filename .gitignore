@@ -7,6 +7,8 @@ __pycache__/
 # Virtual environments
 venv/
 **/venv/
+.venv/
+**/.venv/
 env/
 **/env/
 ENV/
@@ -54,3 +56,4 @@ temp/
 tmp/
 daemon_worker/
 D:/Daemon_Minio_Data/
+survey paper/

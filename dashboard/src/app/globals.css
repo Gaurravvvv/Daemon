@@ -167,3 +167,22 @@ body {
   font-weight: 700;
   letter-spacing: -0.4px;
 }
+
+/* Material Symbols Outlined consistent baseline and center alignment */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+  vertical-align: middle;
+  user-select: none;
+  flex-shrink: 0;
+}

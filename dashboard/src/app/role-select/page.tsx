@@ -25,10 +25,10 @@ export default function RoleSelect() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md border border-border-base bg-surface rounded-[20px] shadow-xl p-8 relative">
+      <div className="w-full max-w-md border border-border-base bg-surface rounded-[20px] shadow-xl p-6 sm:p-8 relative">
         
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-[12px] bg-surface-container border border-border-base flex items-center justify-center mb-4">
+        <div className="flex flex-col items-center mb-6 sm:mb-8 text-center">
+          <div className="w-12 h-12 rounded-[12px] bg-surface-container border border-border-base flex items-center justify-center mb-3 sm:mb-4">
             <span className="material-symbols-outlined text-[26px] text-primary">
               terminal
             </span>
@@ -36,10 +36,10 @@ export default function RoleSelect() {
           <div className="ide-chip mb-2 border-primary/30 text-primary">
             DAEMON_v2.4
           </div>
-          <h1 className="text-2xl font-bold title-tight text-foreground tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold title-tight text-foreground tracking-tight">
             Cluster Access Gateway
           </h1>
-          <p className="font-sans text-xs text-secondary mt-1 text-center">
+          <p className="font-sans text-xs text-secondary mt-1 max-w-xs">
             Authenticate to initialize node connection to the distributed grid
           </p>
         </div>
@@ -48,37 +48,37 @@ export default function RoleSelect() {
           <div className="flex flex-col gap-3">
             <button 
               onClick={() => setRole("orchestrator")}
-              className="card-interactive w-full py-4 px-5 border border-border-base hover:border-primary bg-surface-container rounded-[12px] flex items-center gap-4 text-left group"
+              className="card-interactive w-full py-3.5 sm:py-4 px-4 sm:px-5 border border-border-base hover:border-primary bg-surface-container rounded-[12px] flex items-center gap-3.5 sm:gap-4 text-left group"
             >
               <div className="w-10 h-10 rounded-[10px] bg-surface border border-border-base flex items-center justify-center shrink-0 group-hover:border-primary/50 transition-colors">
                 <span className="material-symbols-outlined text-[22px] text-secondary group-hover:text-primary transition-colors">
                   admin_panel_settings
                 </span>
               </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-sans font-bold text-sm text-foreground group-hover:text-primary transition-colors">Orchestrator</span>
-                  <span className="ide-chip text-[10px]">MASTER</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-sans font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">Orchestrator</span>
+                  <span className="ide-chip text-[10px] shrink-0">MASTER</span>
                 </div>
-                <p className="font-sans text-xs text-secondary mt-0.5">Submit tasks, monitor queues & manage nodes</p>
+                <p className="font-sans text-xs text-secondary mt-0.5 line-clamp-1">Submit tasks, monitor queues & manage nodes</p>
               </div>
             </button>
             
             <button 
               onClick={() => handleLogin({ preventDefault: () => {} } as React.FormEvent)}
-              className="card-interactive w-full py-4 px-5 border border-border-base hover:border-success-emerald bg-surface-container rounded-[12px] flex items-center gap-4 text-left group"
+              className="card-interactive w-full py-3.5 sm:py-4 px-4 sm:px-5 border border-border-base hover:border-success-emerald bg-surface-container rounded-[12px] flex items-center gap-3.5 sm:gap-4 text-left group"
             >
               <div className="w-10 h-10 rounded-[10px] bg-surface border border-border-base flex items-center justify-center shrink-0 group-hover:border-success-emerald/50 transition-colors">
                 <span className="material-symbols-outlined text-[22px] text-secondary group-hover:text-success-emerald transition-colors">
                   memory
                 </span>
               </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-sans font-bold text-sm text-foreground group-hover:text-success-emerald transition-colors">Worker Node</span>
-                  <span className="ide-chip text-[10px] text-success-emerald border-success-emerald/30">CLIENT</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-sans font-bold text-sm text-foreground group-hover:text-success-emerald transition-colors truncate">Worker Node</span>
+                  <span className="ide-chip text-[10px] text-success-emerald border-success-emerald/30 shrink-0">CLIENT</span>
                 </div>
-                <p className="font-sans text-xs text-secondary mt-0.5">Donate idle CPU/GPU compute power</p>
+                <p className="font-sans text-xs text-secondary mt-0.5 line-clamp-1">Donate idle CPU/GPU compute power</p>
               </div>
             </button>
           </div>
@@ -88,46 +88,48 @@ export default function RoleSelect() {
               <button 
                 type="button" 
                 onClick={() => setRole("none")}
-                className="text-secondary hover:text-primary p-1 rounded-[6px] transition-colors"
+                className="text-secondary hover:text-primary p-1.5 rounded-[6px] hover:bg-surface-container transition-colors inline-flex items-center justify-center"
+                title="Back to Role Selection"
               >
-                <span className="material-symbols-outlined text-sm">arrow_back</span>
+                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
               </button>
               <span className="micro-label text-primary font-bold">Orchestrator Authentication</span>
             </div>
 
             {error && (
-              <div className="bg-error-crimson/10 border border-error-crimson/40 text-error-crimson text-xs p-3 rounded-[8px] font-mono">
+              <div className="bg-error-crimson/10 border border-error-crimson/40 text-error-crimson text-xs p-3 rounded-[8px] font-mono leading-relaxed">
                 {error}
               </div>
             )}
 
             <div>
-              <label className="micro-label text-secondary block mb-1">Grid ID</label>
+              <label className="micro-label text-secondary block mb-1.5">Grid ID</label>
               <input 
                 type="text"
                 value={id}
                 onChange={(e) => setId(e.target.value)}
-                className="w-full bg-surface-container border border-border-base rounded-[6px] px-3 py-2 font-mono text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                className="w-full h-10 bg-surface-container border border-border-base rounded-[8px] px-3 font-mono text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-secondary/50"
                 placeholder="admin"
                 autoFocus
               />
             </div>
             
             <div>
-              <label className="micro-label text-secondary block mb-1">Passkey</label>
+              <label className="micro-label text-secondary block mb-1.5">Passkey</label>
               <input 
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-surface-container border border-border-base rounded-[6px] px-3 py-2 font-mono text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                className="w-full h-10 bg-surface-container border border-border-base rounded-[8px] px-3 font-mono text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-secondary/50"
                 placeholder="•••••"
               />
             </div>
 
             <button 
               type="submit"
-              className="btn-interactive mt-2 w-full bg-primary text-on-primary micro-label font-bold py-2.5 rounded-[8px] border border-primary shadow-sm hover:opacity-95"
+              className="btn-interactive mt-1 w-full h-10 bg-primary text-on-primary micro-label font-bold rounded-[8px] border border-primary shadow-sm hover:opacity-95 flex items-center justify-center gap-2"
             >
+              <span className="material-symbols-outlined text-[16px]">lock_open</span>
               INITIALIZE CONNECTION
             </button>
           </form>

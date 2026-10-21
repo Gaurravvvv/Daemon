@@ -86,19 +86,23 @@ export default function WorkerDashboard() {
     <>
       {/* Password Modal */}
       {selectedJob && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
-          <div className="bg-surface border border-border-base w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="border-b border-border-base px-6 py-4 flex justify-between items-center bg-surface-container">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-4">
+          <div className="bg-surface border border-border-base w-full max-w-sm max-h-[92vh] flex flex-col rounded-[16px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="border-b border-border-base px-5 sm:px-6 py-4 flex justify-between items-center bg-surface-container shrink-0">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[16px] text-primary">lock</span>
+                <span className="material-symbols-outlined text-[18px] text-primary">lock</span>
                 <h2 className="micro-label font-bold text-primary">Protected Task Access</h2>
               </div>
-              <button onClick={() => setSelectedJob(null)} className="text-secondary hover:text-error-crimson p-1 rounded-[6px]">
+              <button 
+                onClick={() => setSelectedJob(null)} 
+                className="text-secondary hover:text-error-crimson p-1.5 rounded-[6px] hover:bg-surface transition-colors inline-flex items-center justify-center"
+                title="Close"
+              >
                 <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
             
-            <form onSubmit={handleVerifyPassword} className="p-6 space-y-4">
+            <form onSubmit={handleVerifyPassword} className="p-5 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div>
                 <label className="micro-label text-secondary block mb-1.5">Cluster Passkey</label>
                 <input 
@@ -107,7 +111,7 @@ export default function WorkerDashboard() {
                   type="password" 
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  className="w-full bg-surface border border-border-base px-3 py-2 text-sm font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px]" 
+                  className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] transition-all placeholder:text-secondary/50" 
                   placeholder="Enter orchestrator passkey..." 
                 />
                 {passwordError && (
@@ -115,18 +119,18 @@ export default function WorkerDashboard() {
                 )}
               </div>
               
-              <div className="pt-3 border-t border-border-base flex justify-end gap-3">
+              <div className="pt-3 border-t border-border-base flex justify-end gap-3 shrink-0">
                 <button 
                   type="button" 
                   onClick={() => setSelectedJob(null)} 
-                  className="px-4 py-2 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[8px]"
+                  className="h-9 px-4 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[8px] inline-flex items-center justify-center"
                 >
                   Cancel
                 </button>
                 <button 
                   disabled={isVerifying} 
                   type="submit" 
-                  className="btn-interactive px-5 py-2 text-xs micro-label bg-primary text-on-primary font-bold rounded-[8px] border border-primary flex items-center gap-2"
+                  className="btn-interactive h-9 px-5 text-xs micro-label bg-primary text-on-primary font-bold rounded-[8px] border border-primary inline-flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
                   {isVerifying ? "Verifying..." : "Authenticate"}
                 </button>
@@ -138,24 +142,24 @@ export default function WorkerDashboard() {
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2">
-        <div>
-          <h1 className="text-3xl font-bold title-tight text-primary mb-1">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold title-tight text-primary">
             {poolFilter === "public" ? "Global Compute Pool" : "Private Cluster Gateway"}
           </h1>
-          <p className="text-sm font-sans text-secondary">
+          <p className="text-xs sm:text-sm font-sans text-secondary max-w-2xl">
             {poolFilter === "public" 
               ? "Discover and claim public compute workloads donated to the decentralized grid." 
               : "Isolated enterprise workloads partitioned into dedicated private cluster pools."}
           </p>
         </div>
         
-        <div className="relative w-full md:w-80">
-          <span className="material-symbols-outlined absolute left-3 top-2.5 text-secondary text-[16px]">search</span>
+        <div className="relative w-full md:w-80 shrink-0">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[18px] pointer-events-none">search</span>
           <input 
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface border border-border-base rounded-[8px] py-2 pl-9 pr-3 text-sm font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" 
+            className="w-full h-10 bg-surface border border-border-base rounded-[8px] pl-9.5 pr-3 text-xs sm:text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-secondary/50" 
             placeholder="Search Job ID or Alias..." 
           />
         </div>
@@ -163,41 +167,41 @@ export default function WorkerDashboard() {
 
       {/* Pool Switcher Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border-base">
-        <div className="flex items-center gap-2 bg-surface-container p-1 rounded-[10px] border border-border-base">
+        <div className="flex items-center gap-1.5 bg-surface-container p-1 rounded-[10px] border border-border-base">
           <button
             onClick={() => setPoolFilter("public")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 micro-label rounded-[6px] transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 micro-label rounded-[6px] transition-all ${
               poolFilter === "public"
-                ? "bg-primary text-on-primary font-bold shadow-sm"
+                ? "bg-primary text-on-primary font-bold shadow-xs"
                 : "text-secondary hover:text-primary hover:bg-surface"
             }`}
           >
-            <span className="material-symbols-outlined text-[14px]">public</span>
+            <span className="material-symbols-outlined text-[15px]">public</span>
             Global Pool (Public)
           </button>
 
           <button
             onClick={() => setPoolFilter("private")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 micro-label rounded-[6px] transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 micro-label rounded-[6px] transition-all ${
               poolFilter === "private"
-                ? "bg-primary text-on-primary font-bold shadow-sm"
+                ? "bg-primary text-on-primary font-bold shadow-xs"
                 : "text-secondary hover:text-primary hover:bg-surface"
             }`}
           >
-            <span className="material-symbols-outlined text-[14px]">lock</span>
+            <span className="material-symbols-outlined text-[15px]">lock</span>
             Private Clusters
           </button>
         </div>
 
         {poolFilter === "private" && (
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="micro-label text-secondary whitespace-nowrap">Target Cluster:</span>
+            <span className="micro-label text-secondary whitespace-nowrap shrink-0">Target Cluster:</span>
             <input
               type="text"
               value={clusterIdInput}
               onChange={(e) => setClusterIdInput(e.target.value)}
               placeholder="e.g. private_cluster_01"
-              className="bg-surface border border-border-base rounded-[6px] px-3 py-1.5 font-mono text-xs text-primary focus:outline-none focus:border-primary w-full sm:w-60"
+              className="bg-surface border border-border-base rounded-[8px] h-9 px-3 font-mono text-xs text-foreground focus:outline-none focus:border-primary w-full sm:w-60 min-w-0"
             />
           </div>
         )}
@@ -205,7 +209,7 @@ export default function WorkerDashboard() {
 
       {/* Job Grid */}
       {filteredJobs.length === 0 ? (
-        <div className="mt-8 text-center text-secondary font-mono text-xs p-12 border border-dashed border-border-base rounded-[16px] bg-surface/50">
+        <div className="mt-8 text-center text-secondary font-mono text-xs p-8 sm:p-12 border border-dashed border-border-base rounded-[16px] bg-surface/50">
           <span className="material-symbols-outlined text-4xl mb-2 text-secondary/40 block">cloud_sync</span>
           {poolFilter === "public" ? (
             <p>No active public jobs found in the global pool. Waiting for orchestrator dispatches...</p>
@@ -219,37 +223,37 @@ export default function WorkerDashboard() {
             <div 
               key={job.job_id} 
               onClick={() => handleJobClick(job)}
-              className="card-interactive cursor-pointer bg-surface border border-border-base rounded-[16px] p-5 hover:border-primary flex flex-col relative shadow-sm group"
+              className="card-interactive cursor-pointer bg-surface border border-border-base rounded-[16px] p-4 sm:p-5 hover:border-primary flex flex-col relative shadow-sm group transition-all"
             >
-              <div className="flex justify-between items-start mb-3">
-                <span className="ide-chip font-bold text-primary border-primary/30 group-hover:border-primary">
+              <div className="flex justify-between items-start gap-2 mb-3">
+                <span className="ide-chip font-bold text-primary border-primary/30 group-hover:border-primary shrink-0 truncate max-w-[130px]">
                   #{job.job_id.substring(0, 10)}
                 </span>
                 
-                <div className="flex gap-2 items-center">
-                  <span className="ide-chip text-[10px] text-secondary">
+                <div className="flex flex-wrap gap-1.5 items-center justify-end">
+                  <span className="ide-chip text-[10px] text-secondary truncate max-w-[110px]">
                     {job.pool_id || "public_pool"}
                   </span>
                   {job.requires_password && (
-                    <span className="material-symbols-outlined text-secondary text-[14px]" title="Password Protected">lock</span>
+                    <span className="material-symbols-outlined text-secondary text-[14px] shrink-0" title="Password Protected">lock</span>
                   )}
-                  <span className="ide-chip border-success-emerald/30 text-success-emerald text-[10px] bg-success-emerald/5">
+                  <span className="ide-chip border-success-emerald/30 text-success-emerald text-[10px] bg-success-emerald/5 shrink-0">
                     <span className="active-dot"></span>
                     ACTIVE
                   </span>
                 </div>
               </div>
               
-              <h3 className="font-sans font-bold text-base mb-1 text-foreground group-hover:text-primary transition-colors line-clamp-1">
+              <h3 className="font-sans font-bold text-base mb-1.5 text-foreground group-hover:text-primary transition-colors line-clamp-1">
                 {job.job_name}
               </h3>
-              <div className="mb-6">
+              <div className="mb-5 sm:mb-6">
                 <span className="ide-chip text-[10px] uppercase text-secondary">
                   {job.job_type}
                 </span>
               </div>
               
-              <div className="mt-auto pt-4 border-t border-border-base/70 flex justify-between items-center text-xs font-mono text-secondary">
+              <div className="mt-auto pt-3.5 border-t border-border-base/70 flex flex-wrap justify-between items-center gap-2 text-xs font-mono text-secondary">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[15px] text-primary">data_usage</span>
                   <span>{job.progress || 0}% Complete</span>
