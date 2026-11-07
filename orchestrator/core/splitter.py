@@ -19,6 +19,7 @@ class TaskSplitter:
                 "chunk_index": i,
                 "total_chunks": split_count,
                 "compute_mode": compute_mode,
+                "retry_count": 0,
                 "parameters": parameters
             }
             tasks.append(task)

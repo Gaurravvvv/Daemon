@@ -39,9 +39,9 @@ services:
       MINIO_ROOT_PASSWORD: password123  # Needs to be at least 8 chars
     command: server /data --console-address ":9001"
     volumes:
-      # Mapping directly to the D:\ drive as requested by the user
-      - D:\Daemon_Minio_Data:/data
+      - minio_data:/data
     restart: unless-stopped
 
 volumes:
   mongodb_data:
+  minio_data:

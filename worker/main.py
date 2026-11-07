@@ -1,6 +1,8 @@
 import os
 import sys
 import logging
+import threading
+import time
 import requests
 from consumer import TaskConsumer
 
@@ -61,6 +63,25 @@ def probe_gpu() -> dict:
         return {"has_gpu": False, "reason": f"CUDA compute test failed: {e}"}
 
 
+def start_heartbeat_thread(orchestrator_url: str, worker_id: str, pool_id: str, interval: int = 5):
+    """Background sliding-window heartbeat daemon (5s cadence, 15s server TTL)."""
+    def _heartbeat_loop():
+        while True:
+            try:
+                requests.post(
+                    f"{orchestrator_url}/api/v1/workers/{worker_id}/heartbeat?pool_id={pool_id}",
+                    timeout=3
+                )
+            except Exception:
+                pass
+            time.sleep(interval)
+
+    t = threading.Thread(target=_heartbeat_loop, daemon=True, name="WorkerHeartbeat")
+    t.start()
+    logger.info(f"Heartbeat leasing thread online ({interval}s interval).")
+    return t
+
+
 def main():
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL", "http://localhost:8000")
     rabbitmq_url = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
@@ -106,38 +127,15 @@ def main():
         }
         reg_res = requests.post(f"{orchestrator_url}/api/v1/workers/register", json=reg_payload, timeout=5)
         if reg_res.ok:
+            heartbeat_interval = reg_res.json().get("heartbeat_interval", 5)
             logger.info(f"Successfully registered node {consumer.worker_id} with Orchestrator.")
+            # Start background lease renewal
+            start_heartbeat_thread(orchestrator_url, consumer.worker_id, pool_id, interval=heartbeat_interval)
     except Exception as e:
         logger.warning(f"Could not register worker with Orchestrator: {e}")
-    
-    # Build join message with hardware info
-    if gpu_info["has_gpu"]:
-        hw_tag = f"[GPU: {gpu_info['device_name']} ({gpu_info['vram_gb']}GB VRAM)]"
-    else:
-        hw_tag = "[CPU MODE]"
-    
-    join_msg = f"{consumer.worker_id} connected to pool '{pool_id}' {hw_tag}"
-    
-    # Broadcast join event to ALL active jobs on this pool
-    try:
-        res = requests.get(f"{orchestrator_url}/api/v1/jobs", timeout=5)
-        if res.ok:
-            jobs = res.json().get("jobs", [])
-            for job in jobs:
-                if job.get("pool_id") == pool_id and job.get("status") == "processing":
-                    requests.post(
-                        f"{orchestrator_url}/api/v1/jobs/{job['job_id']}/events",
-                        json={
-                            "source": "WORKER",
-                            "level": "SYSTEM",
-                            "message": join_msg,
-                            "worker_id": consumer.worker_id,
-                        },
-                        timeout=3,
-                    )
-    except Exception as e:
-        logger.warning(f"Could not broadcast join event: {e}")
-    
+        # Start heartbeat anyway to recover if orchestrator boots shortly after
+        start_heartbeat_thread(orchestrator_url, consumer.worker_id, pool_id, interval=5)
+
     try:
         consumer.start_listening()
     except KeyboardInterrupt:

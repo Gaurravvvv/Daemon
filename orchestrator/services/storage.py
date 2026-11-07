@@ -19,19 +19,22 @@ class MinioStorage:
             endpoint_url=self.endpoint,
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
-            config=Config(signature_version='s3v4')
+            config=Config(signature_version='s3v4', connect_timeout=3, retries={'max_attempts': 2})
         )
-        
-        self._ensure_bucket_exists()
+        self._bucket_checked = False
 
     def _ensure_bucket_exists(self):
+        if self._bucket_checked:
+            return
         try:
             self.s3.head_bucket(Bucket=self.bucket_name)
+            self._bucket_checked = True
         except ClientError:
             logger.info(f"Bucket {self.bucket_name} not found. Creating it...")
             try:
                 self.s3.create_bucket(Bucket=self.bucket_name)
                 logger.info(f"Bucket {self.bucket_name} created successfully.")
+                self._bucket_checked = True
             except Exception as e:
                 logger.warning(f"Could not create bucket {self.bucket_name}: {e}")
         except Exception as conn_err:
@@ -51,6 +54,22 @@ class MinioStorage:
             return f"minio://{self.bucket_name}/{object_name}"
         except Exception as e:
             logger.error(f"Failed to upload {object_name}: {e}")
+            raise e
+
+    def upload_bytes(self, data: bytes, object_name: str, content_type: str = "application/octet-stream") -> str:
+        """Upload raw in-memory bytes directly to MinIO."""
+        self._ensure_bucket_exists()
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=object_name,
+                Body=data,
+                ContentType=content_type
+            )
+            logger.info(f"Successfully uploaded {object_name} ({len(data)} bytes) to MinIO")
+            return f"minio://{self.bucket_name}/{object_name}"
+        except Exception as e:
+            logger.error(f"Failed to upload bytes to {object_name}: {e}")
             raise e
 
     def list_results(self, job_id: str) -> list:

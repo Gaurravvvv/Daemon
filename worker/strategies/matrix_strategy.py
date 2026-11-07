@@ -4,6 +4,7 @@ import zipfile
 import tempfile
 import json
 import time
+import shutil
 import numpy as np
 from storage import storage
 
@@ -59,93 +60,96 @@ class MatrixMultiplicationStrategy:
         extract_dir = os.path.join(temp_dir, f"{task_id}_extract")
         os.makedirs(extract_dir, exist_ok=True)
 
-        target_file = None
-        with zipfile.ZipFile(local_zip_path, 'r') as zf:
-            json_files = [
-                f for f in zf.namelist()
-                if not f.endswith('/') and f.lower().endswith('.json')
-            ]
-            if not json_files:
-                raise Exception("No JSON partition files found in math payload ZIP.")
+        try:
+            target_file = None
+            with zipfile.ZipFile(local_zip_path, 'r') as zf:
+                json_files = [
+                    f for f in zf.namelist()
+                    if not f.endswith('/') and f.lower().endswith('.json')
+                ]
+                if not json_files:
+                    raise Exception("No JSON partition files found in math payload ZIP.")
 
-            # Match chunk_index or pick modulo
-            matched = [f for f in json_files if f"chunk_{chunk_index}.json" in f or f"partition_{chunk_index}.json" in f]
-            target_file = matched[0] if matched else json_files[chunk_index % len(json_files)]
-            zf.extract(target_file, extract_dir)
+                # Match chunk_index or pick modulo
+                matched = [f for f in json_files if f"chunk_{chunk_index}.json" in f or f"partition_{chunk_index}.json" in f]
+                target_file = matched[0] if matched else json_files[chunk_index % len(json_files)]
+                zf.extract(target_file, extract_dir)
 
-        json_path = os.path.join(extract_dir, target_file)
-        with open(json_path, 'r') as f:
-            partition_data = json.load(f)
+            json_path = os.path.join(extract_dir, target_file)
+            with open(json_path, 'r') as f:
+                partition_data = json.load(f)
 
-        # 4. Extract matrices
-        matrix_a_slice = np.array(partition_data.get("matrix_A_row_slice", []), dtype=np.float64)
-        matrix_b = np.array(partition_data.get("matrix_B", []), dtype=np.float64)
-        monte_carlo_samples = partition_data.get("monte_carlo_samples", 50000)
+            # 4. Extract matrices
+            matrix_a_slice = np.array(partition_data.get("matrix_A_row_slice", []), dtype=np.float64)
+            matrix_b = np.array(partition_data.get("matrix_B", []), dtype=np.float64)
+            monte_carlo_samples = partition_data.get("monte_carlo_samples", 50000)
 
-        device_used = "CPU (NumPy BLAS)"
-        start_time = time.time()
+            device_used = "CPU (NumPy BLAS)"
+            start_time = time.time()
 
-        # 5. Compute Matrix Product: C_slice = A_slice @ B
-        run_on_gpu = USE_GPU and compute_mode != "cpu_only"
-        if run_on_gpu:
-            try:
-                import cupy as cp
-                a_gpu = cp.asarray(matrix_a_slice)
-                b_gpu = cp.asarray(matrix_b)
-                c_gpu = cp.matmul(a_gpu, b_gpu)
-                c_slice = cp.asnumpy(c_gpu)
-                del a_gpu, b_gpu, c_gpu
-                cp.get_default_memory_pool().free_all_blocks()
-                device_used = "GPU (CuPy CUDA)"
-            except Exception as e:
-                logger.warning(f"[MatrixStrategy] GPU matmul failed ({e}), falling back to CPU")
+            # 5. Compute Matrix Product: C_slice = A_slice @ B
+            run_on_gpu = USE_GPU and compute_mode != "cpu_only"
+            if run_on_gpu:
+                try:
+                    import cupy as cp
+                    a_gpu = cp.asarray(matrix_a_slice)
+                    b_gpu = cp.asarray(matrix_b)
+                    c_gpu = cp.matmul(a_gpu, b_gpu)
+                    c_slice = cp.asnumpy(c_gpu)
+                    del a_gpu, b_gpu, c_gpu
+                    cp.get_default_memory_pool().free_all_blocks()
+                    device_used = "GPU (CuPy CUDA)"
+                except Exception as e:
+                    logger.warning(f"[MatrixStrategy] GPU matmul failed ({e}), falling back to CPU")
+                    c_slice = np.matmul(matrix_a_slice, matrix_b)
+                    device_used = "CPU (fallback)"
+            else:
                 c_slice = np.matmul(matrix_a_slice, matrix_b)
-                device_used = "CPU (fallback)"
-        else:
-            c_slice = np.matmul(matrix_a_slice, matrix_b)
 
-        # 6. Monte Carlo numerical simulation workload
-        if monte_carlo_samples > 0:
-            rand_points = np.random.uniform(-1.0, 1.0, (min(monte_carlo_samples, 100000), 2))
-            inside_circle = np.sum((rand_points[:, 0]**2 + rand_points[:, 1]**2) <= 1.0)
-            pi_estimate = 4.0 * inside_circle / len(rand_points)
-        else:
-            pi_estimate = 3.14159
+            # 6. Monte Carlo numerical simulation workload
+            if monte_carlo_samples > 0:
+                rand_points = np.random.uniform(-1.0, 1.0, (min(monte_carlo_samples, 100000), 2))
+                inside_circle = np.sum((rand_points[:, 0]**2 + rand_points[:, 1]**2) <= 1.0)
+                pi_estimate = 4.0 * inside_circle / len(rand_points)
+            else:
+                pi_estimate = 3.14159
 
-        elapsed_seconds = round(time.time() - start_time, 4)
-        elapsed_ms = int(elapsed_seconds * 1000)
+            elapsed_seconds = round(time.time() - start_time, 4)
+            elapsed_ms = int(elapsed_seconds * 1000)
 
-        # Numerical integrity checks
-        frobenius_norm = float(np.linalg.norm(c_slice))
+            # Numerical integrity checks
+            frobenius_norm = float(np.linalg.norm(c_slice))
 
-        result_payload = {
-            "task_id": task_id,
-            "job_id": job_id,
-            "chunk_index": chunk_index,
-            "status": "completed",
-            "operation": "distributed_block_matrix_multiplication",
-            "device": device_used,
-            "slice_shape": list(c_slice.shape),
-            "frobenius_norm": frobenius_norm,
-            "pi_monte_carlo": round(float(pi_estimate), 6),
-            "compute_time_ms": elapsed_ms,
-            "result_matrix_slice": c_slice.tolist()
-        }
+            result_payload = {
+                "task_id": task_id,
+                "job_id": job_id,
+                "chunk_index": chunk_index,
+                "status": "completed",
+                "operation": "distributed_block_matrix_multiplication",
+                "device": device_used,
+                "slice_shape": list(c_slice.shape),
+                "frobenius_norm": frobenius_norm,
+                "pi_monte_carlo": round(float(pi_estimate), 6),
+                "compute_time_ms": elapsed_ms,
+                "result_matrix_slice": c_slice.tolist()
+            }
 
-        # 7. Upload result JSON to MinIO
-        result_path = os.path.join(extract_dir, f"{task_id}_matrix_result.json")
-        with open(result_path, 'w') as f:
-            json.dump(result_payload, f)
+            # 7. Upload result JSON to MinIO
+            result_path = os.path.join(extract_dir, f"{task_id}_matrix_result.json")
+            with open(result_path, 'w') as f:
+                json.dump(result_payload, f)
 
-        result_object = f"{job_id}/results/{task_id}_matrix_block_{chunk_index}.json"
-        uploaded_url = storage.upload_result(bucket, result_path, result_object)
-        logger.info(f"[MatrixStrategy] Uploaded result to {uploaded_url} in {elapsed_seconds}s on [{device_used}]")
+            result_object = f"{job_id}/results/{task_id}_matrix_block_{chunk_index}.json"
+            uploaded_url = storage.upload_result(bucket, result_path, result_object)
+            logger.info(f"[MatrixStrategy] Uploaded result to {uploaded_url} in {elapsed_seconds}s on [{device_used}]")
 
-        return {
-            "task_id": task_id,
-            "status": "success",
-            "device": device_used,
-            "processing_time": elapsed_seconds,
-            "result_url": uploaded_url,
-            "frobenius_norm": frobenius_norm
-        }
+            return {
+                "task_id": task_id,
+                "status": "success",
+                "device": device_used,
+                "processing_time": elapsed_seconds,
+                "result_url": uploaded_url,
+                "frobenius_norm": frobenius_norm
+            }
+        finally:
+            shutil.rmtree(extract_dir, ignore_errors=True)

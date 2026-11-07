@@ -2,6 +2,7 @@ import logging
 import os
 import zipfile
 import tempfile
+import shutil
 import numpy as np
 from PIL import Image
 import time
@@ -144,93 +145,96 @@ class ImageProcessingStrategy:
         extract_dir = os.path.join(temp_dir, f"{task_id}_extract")
         os.makedirs(extract_dir, exist_ok=True)
         
-        valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
-        with zipfile.ZipFile(local_zip_path, 'r') as zf:
-            all_files = [
-                f for f in zf.namelist() 
-                if not f.endswith('/') 
-                and f.lower().endswith(valid_extensions)
-                and not os.path.basename(f).startswith('.')
-            ]
+        try:
+            valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
+            with zipfile.ZipFile(local_zip_path, 'r') as zf:
+                all_files = [
+                    f for f in zf.namelist() 
+                    if not f.endswith('/') 
+                    and f.lower().endswith(valid_extensions)
+                    and not os.path.basename(f).startswith('.')
+                ]
+                
+                if not all_files:
+                    raise Exception("No valid image files (.jpg, .png, etc.) found in the uploaded ZIP payload.")
+                    
+                target_image_name = all_files[chunk_index % len(all_files)]
+                zf.extract(target_image_name, extract_dir)
+                
+            img_path = os.path.join(extract_dir, target_image_name)
             
-            if not all_files:
-                raise Exception("No valid image files (.jpg, .png, etc.) found in the uploaded ZIP payload.")
-                
-            target_image_name = all_files[chunk_index % len(all_files)]
-            zf.extract(target_image_name, extract_dir)
+            # 4. Load image into array
+            logger.info(f"Processing image {target_image_name} on [{device_name}]...")
+            img = Image.open(img_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img_array = np.array(img)
             
-        img_path = os.path.join(extract_dir, target_image_name)
-        
-        # 4. Load image into array
-        logger.info(f"Processing image {target_image_name} on [{device_name}]...")
-        img = Image.open(img_path)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        img_array = np.array(img)
-        
-        start_time = time.time()
-        
-        # 5. GPU/CPU Processing Pipeline
-        actual_device = device_name
-        if run_on_gpu:
-            try:
-                import cupy as cp  # type: ignore
-                # Stage 1: Sobel Edge Detection (CUDA convolution)
-                edges_gpu = _sobel_edge_detect(img_array, use_gpu=True)
-                
-                # Stage 2: Contrast Enhancement on original
-                enhanced_gpu = _contrast_enhance(img_array, use_gpu=True)
-                
-                # Transfer back to host CPU memory
-                edges_cpu = cp.asnumpy(edges_gpu)
-                enhanced_cpu = cp.asnumpy(enhanced_gpu)
-                
-                # Explicit cleanup of device tensors and memory pool
-                del edges_gpu, enhanced_gpu
-                cp.get_default_memory_pool().free_all_blocks()
-                
-            except Exception as gpu_err:
-                logger.warning(f"[ImageStrategy] GPU processing failed ({gpu_err}), falling back to CPU")
+            start_time = time.time()
+            
+            # 5. GPU/CPU Processing Pipeline
+            actual_device = device_name
+            if run_on_gpu:
                 try:
                     import cupy as cp  # type: ignore
+                    # Stage 1: Sobel Edge Detection (CUDA convolution)
+                    edges_gpu = _sobel_edge_detect(img_array, use_gpu=True)
+                    
+                    # Stage 2: Contrast Enhancement on original
+                    enhanced_gpu = _contrast_enhance(img_array, use_gpu=True)
+                    
+                    # Transfer back to host CPU memory
+                    edges_cpu = cp.asnumpy(edges_gpu)
+                    enhanced_cpu = cp.asnumpy(enhanced_gpu)
+                    
+                    # Explicit cleanup of device tensors and memory pool
+                    del edges_gpu, enhanced_gpu
                     cp.get_default_memory_pool().free_all_blocks()
-                    cp.get_default_pinned_memory_pool().free_all_blocks()
-                except Exception:
-                    pass
-                
-                USE_GPU = False
+                    
+                except Exception as gpu_err:
+                    logger.warning(f"[ImageStrategy] GPU processing failed ({gpu_err}), falling back to CPU")
+                    try:
+                        import cupy as cp  # type: ignore
+                        cp.get_default_memory_pool().free_all_blocks()
+                        cp.get_default_pinned_memory_pool().free_all_blocks()
+                    except Exception:
+                        pass
+                    
+                    USE_GPU = False
+                    edges_cpu = _sobel_edge_detect(img_array, use_gpu=False)
+                    enhanced_cpu = _contrast_enhance(img_array, use_gpu=False)
+                    actual_device = "CPU (fallback)"
+            else:
                 edges_cpu = _sobel_edge_detect(img_array, use_gpu=False)
                 enhanced_cpu = _contrast_enhance(img_array, use_gpu=False)
-                actual_device = "CPU (fallback)"
-        else:
-            edges_cpu = _sobel_edge_detect(img_array, use_gpu=False)
-            enhanced_cpu = _contrast_enhance(img_array, use_gpu=False)
-        
-        elapsed = round(time.time() - start_time, 4)
-        logger.info(f"[ImageStrategy] Processing completed on [{actual_device}] in {elapsed}s")
-        
-        # 6. Save both results
-        base_name = os.path.basename(target_image_name)
-        name_stem = os.path.splitext(base_name)[0]
-        ext = os.path.splitext(base_name)[1] or ".jpg"
-        
-        edges_path = os.path.join(extract_dir, f"edges_{name_stem}{ext}")
-        Image.fromarray(edges_cpu).save(edges_path)
-        
-        enhanced_path = os.path.join(extract_dir, f"enhanced_{name_stem}{ext}")
-        Image.fromarray(enhanced_cpu).save(enhanced_path)
-        
-        # 7. Upload results back to MinIO
-        edges_url = storage.upload_result(bucket, edges_path, f"{job_id}/results/{task_id}_edges_{base_name}")
-        enhanced_url = storage.upload_result(bucket, enhanced_path, f"{job_id}/results/{task_id}_enhanced_{base_name}")
-        
-        logger.info(f"[ImageStrategy] Task {task_id} complete. Edges: {edges_url}, Enhanced: {enhanced_url}")
-        
-        return {
-            "task_id": task_id,
-            "status": "success",
-            "device": actual_device,
-            "processing_time": elapsed,
-            "edges_url": edges_url,
-            "enhanced_url": enhanced_url,
-        }
+            
+            elapsed = round(time.time() - start_time, 4)
+            logger.info(f"[ImageStrategy] Processing completed on [{actual_device}] in {elapsed}s")
+            
+            # 6. Save both results
+            base_name = os.path.basename(target_image_name)
+            name_stem = os.path.splitext(base_name)[0]
+            ext = os.path.splitext(base_name)[1] or ".jpg"
+            
+            edges_path = os.path.join(extract_dir, f"edges_{name_stem}{ext}")
+            Image.fromarray(edges_cpu).save(edges_path)
+            
+            enhanced_path = os.path.join(extract_dir, f"enhanced_{name_stem}{ext}")
+            Image.fromarray(enhanced_cpu).save(enhanced_path)
+            
+            # 7. Upload results back to MinIO
+            edges_url = storage.upload_result(bucket, edges_path, f"{job_id}/results/{task_id}_edges_{base_name}")
+            enhanced_url = storage.upload_result(bucket, enhanced_path, f"{job_id}/results/{task_id}_enhanced_{base_name}")
+            
+            logger.info(f"[ImageStrategy] Task {task_id} complete. Edges: {edges_url}, Enhanced: {enhanced_url}")
+            
+            return {
+                "task_id": task_id,
+                "status": "success",
+                "device": actual_device,
+                "processing_time": elapsed,
+                "edges_url": edges_url,
+                "enhanced_url": enhanced_url,
+            }
+        finally:
+            shutil.rmtree(extract_dir, ignore_errors=True)

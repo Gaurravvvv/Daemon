@@ -8,6 +8,8 @@ import uuid
 import time
 from strategies.dummy_math import DummyMathStrategy
 from strategies.image_processing import ImageProcessingStrategy
+from strategies.matrix_strategy import MatrixMultiplicationStrategy
+from strategies.crypto_strategy import CryptoSearchStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -124,9 +126,14 @@ class TaskConsumer:
             self._emit(job_id, "INFO", f"{self.worker_id} processing chunk {chunk_index + 1} [{device_tag}] (strategy: {job_type})")
             
             start_time = time.time()
+            clean_type = str(job_type).lower().strip()
             
-            if job_type == "image":
+            if clean_type in ("image", "image_processing"):
                 result = ImageProcessingStrategy.execute(task_payload)
+            elif clean_type in ("math", "matrix", "matrix_multiplication"):
+                result = MatrixMultiplicationStrategy.execute(task_payload)
+            elif clean_type in ("crypto", "cryptography", "pow"):
+                result = CryptoSearchStrategy.execute(task_payload)
             else:
                 result = DummyMathStrategy.execute(task_payload)
             
@@ -147,7 +154,12 @@ class TaskConsumer:
             try:
                 resp = requests.post(
                     f"{self.orchestrator_url}/api/v1/jobs/{job_id}/task_complete",
-                    json={"total_chunks": total_chunks},
+                    json={
+                        "total_chunks": total_chunks,
+                        "status": "success",
+                        "chunk_index": chunk_index,
+                        "worker_id": self.worker_id
+                    },
                     timeout=5
                 )
                 if resp.ok:
@@ -171,18 +183,35 @@ class TaskConsumer:
         except Exception as e:
             logger.error(f"Error processing task: {e}")
             logger.error(traceback.format_exc())
-            ch.basic_ack(delivery_tag=method.delivery_tag)
             
-            # Report failure
-            if task_payload:
-                job_id = task_payload.get("job_id")
-                chunk_index = task_payload.get("chunk_index", "?")
-                total_chunks = task_payload.get("total_chunks", 10)
-                self._emit(job_id, "ERROR", f"{self.worker_id} FAILED on chunk {chunk_index + 1}: {str(e)[:100]}")
+            retry_count = int(task_payload.get("retry_count", 0)) if task_payload else 0
+            job_id = task_payload.get("job_id", "unknown") if task_payload else "unknown"
+            chunk_index = task_payload.get("chunk_index", 0) if task_payload else 0
+            total_chunks = task_payload.get("total_chunks", 10) if task_payload else 10
+
+            if retry_count < 2:
+                # Transient error: backoff and requeue task
+                logger.warning(f"Task {task_id} failed transiently (attempt {retry_count + 1}). Requeuing...")
+                self._emit(job_id, "WARNING", f"{self.worker_id} chunk {chunk_index + 1} transient error: {str(e)[:70]}. Requeuing...")
+                time.sleep(1.5)
+                if task_payload:
+                    task_payload["retry_count"] = retry_count + 1
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            else:
+                # Max retries exceeded: acknowledge to drop poisoned task and record failure in DB
+                logger.error(f"Task {task_id} exceeded max retries. Dropping poisoned message.")
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                self._emit(job_id, "ERROR", f"{self.worker_id} FAILED chunk {chunk_index + 1} after {retry_count + 1} attempts: {str(e)[:100]}")
                 try:
                     requests.post(
                         f"{self.orchestrator_url}/api/v1/jobs/{job_id}/task_complete",
-                        json={"total_chunks": total_chunks},
+                        json={
+                            "total_chunks": total_chunks,
+                            "status": "failed",
+                            "error_message": str(e),
+                            "chunk_index": chunk_index,
+                            "worker_id": self.worker_id
+                        },
                         timeout=5
                     )
                 except Exception:

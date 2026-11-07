@@ -9,20 +9,29 @@ export default function OrchestratorDashboard() {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
+  const [activeWorkerCount, setActiveWorkerCount] = useState<number>(0);
 
   useEffect(() => {
-    const fetchJobs = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/v1/jobs");
-        const data = await res.json();
-        setActiveJobs(data.jobs || []);
+        const [jobsRes, workersRes] = await Promise.allSettled([
+          fetch("http://127.0.0.1:8000/api/v1/jobs"),
+          fetch("http://127.0.0.1:8000/api/v1/workers")
+        ]);
+        if (jobsRes.status === "fulfilled" && jobsRes.value.ok) {
+          const data = await jobsRes.value.json();
+          setActiveJobs(data.jobs || []);
+        }
+        if (workersRes.status === "fulfilled" && workersRes.value.ok) {
+          const wdata = await workersRes.value.json();
+          setActiveWorkerCount(wdata.active_count ?? (wdata.workers?.length || 0));
+        }
       } catch (e) {
-        // Backend offline, fallback gracefully
         setActiveJobs([]);
       }
     };
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 4000);
+    fetchData();
+    const interval = setInterval(fetchData, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -226,12 +235,14 @@ export default function OrchestratorDashboard() {
         </div>
 
         <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[96px]">
-          <span className="micro-label text-secondary">Queue Broker</span>
+          <span className="micro-label text-secondary">Active Nodes / Queue</span>
           <div className="mt-2 flex items-baseline justify-between gap-2">
-            <span className="kpi-numeral text-xl sm:text-2xl text-success-emerald truncate">RabbitMQ</span>
+            <span className="kpi-numeral text-xl sm:text-2xl text-success-emerald truncate">
+              {activeWorkerCount} {activeWorkerCount === 1 ? 'Node' : 'Nodes'}
+            </span>
             <div className="flex items-center gap-1.5 ide-chip border-success-emerald/30 text-success-emerald text-[10px] shrink-0">
               <span className="active-dot"></span>
-              LIVE
+              AMQP LIVE
             </div>
           </div>
         </div>

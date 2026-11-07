@@ -2,20 +2,41 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
 import io
 import zipfile
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 import random
 import logging
 from datetime import datetime, timezone
 from pydantic import BaseModel
-from models.schemas import JobSubmitRequest, JobSubmitResponse, WorkerRegisterRequest, WorkerRegisterResponse, VerifyPasswordRequest
+from models.schemas import (
+    JobSubmitRequest, 
+    JobSubmitResponse, 
+    WorkerRegisterRequest, 
+    WorkerRegisterResponse, 
+    WorkerHeartbeatResponse,
+    TaskCompleteRequest,
+    VerifyPasswordRequest
+)
 from services.rabbitmq import rabbitmq_client
 from services.storage import storage
+from services.redis_client import redis_manager
 from core.splitter import TaskSplitter
+from core.aggregator import StateAggregator
 from services.database import db
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
+
+def _normalize_job_type(raw_type: str) -> str:
+    """Normalize polymorphic job type strings across dashboard, schemas, and workers."""
+    cleaned = str(raw_type).lower().strip()
+    if cleaned in ("image", "image_processing"):
+        return "image"
+    if cleaned in ("math", "matrix", "matrix_multiplication"):
+        return "math"
+    if cleaned in ("crypto", "cryptography", "pow"):
+        return "crypto"
+    return cleaned
 
 # ── Helper to push events into MongoDB ──
 async def _emit_event(job_id: str, source: str, level: str, message: str, worker_id: str = None):
@@ -37,7 +58,6 @@ async def list_jobs():
     cursor = db.db.jobs.find().sort("_id", -1)
     async for document in cursor:
         document["_id"] = str(document["_id"])
-        # Mock global progress for the UI if missing
         if "progress" not in document:
             document["progress"] = 0
             
@@ -81,29 +101,31 @@ async def get_job(job_id: str):
 
 @router.post("/jobs/submit", response_model=JobSubmitResponse, status_code=202)
 async def submit_job(job_request: JobSubmitRequest):
-    # Standard JSON submit (from phase 1)
     job_id = f"job-{random.randint(1000, 9999)}"
-    
+    normalized_type = _normalize_job_type(job_request.job_type)
+    split_count = job_request.split_count or 10
+
     job_doc = {
         "job_id": job_id,
         "job_name": job_request.job_name,
-        "job_type": job_request.job_type,
+        "job_type": normalized_type,
         "status": "partitioning",
         "pool_id": job_request.pool_id,
         "raw_data_url": job_request.raw_data_url,
         "compute_mode": job_request.compute_mode,
         "progress": 0,
-        "total_chunks": 5,
-        "completed_chunks": 0
+        "total_chunks": split_count,
+        "completed_chunks": 0,
+        "failed_chunks": 0
     }
     await db.db.jobs.insert_one(job_doc)
     
     tasks = TaskSplitter.partition_job(
         job_id=job_id, 
         raw_data_url=job_request.raw_data_url, 
-        job_type=job_request.job_type,
+        job_type=normalized_type,
         parameters=job_request.parameters,
-        split_count=5,
+        split_count=split_count,
         compute_mode=job_request.compute_mode
     )
     
@@ -121,30 +143,37 @@ async def upload_and_submit(
     job_name: str = Form(...),
     job_type: str = Form(...),
     pool_id: str = Form(...),
-    max_workers: int = Form(100),
+    max_workers: Optional[int] = Form(None),
+    split_count: Optional[int] = Form(None),
     compute_mode: str = Form("any"),
     password: Optional[str] = Form(None),
     file: UploadFile = File(...)
 ):
-    # 1. Generate unique Job ID
+    # 1. Resolve partition count (accepts either split_count from UI or max_workers)
+    partitions = split_count if split_count is not None else (max_workers if max_workers is not None else 10)
+    normalized_type = _normalize_job_type(job_type)
+
+    # 2. Generate unique Job ID
     job_id = f"job-{random.randint(1000, 9999)}"
     
-    # 2. Upload the raw data to MinIO
+    # 3. Upload the raw data to MinIO
     object_name = f"{job_id}/{file.filename}"
     raw_data_url = await storage.upload_file(file, object_name)
     
-    # 3. Save Initial Job State to MongoDB
+    # 4. Save Initial Job State to MongoDB
     job_doc = {
         "job_id": job_id,
         "job_name": job_name,
-        "job_type": job_type,
+        "job_type": normalized_type,
         "status": "partitioning",
         "pool_id": pool_id,
         "raw_data_url": raw_data_url,
         "compute_mode": compute_mode,
         "progress": 0,
-        "total_chunks": max_workers,
-        "completed_chunks": 0
+        "total_chunks": partitions,
+        "completed_chunks": 0,
+        "failed_chunks": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
     }
     if password:
         job_doc["password"] = password
@@ -152,33 +181,33 @@ async def upload_and_submit(
     await db.db.jobs.insert_one(job_doc)
     
     compute_label = {"gpu_only": "GPU Only", "cpu_only": "CPU Only", "any": "Hybrid"}.get(compute_mode, compute_mode)
-    await _emit_event(job_id, "ORCHESTRATOR", "SYSTEM", f"Job '{job_name}' created [{compute_label}]. Uploading payload to MinIO...")
+    await _emit_event(job_id, "ORCHESTRATOR", "SYSTEM", f"Job '{job_name}' created [{compute_label}]. Slicing into {partitions} partitions...")
     
-    # 4. Partition the Job into Micro-Tasks
+    # 5. Partition the Job into Micro-Tasks
     tasks = TaskSplitter.partition_job(
         job_id=job_id, 
         raw_data_url=raw_data_url, 
-        job_type=job_type,
-        parameters={"max_workers": max_workers},
-        split_count=max_workers,
+        job_type=normalized_type,
+        parameters={"max_workers": partitions},
+        split_count=partitions,
         compute_mode=compute_mode
     )
     
     await _emit_event(job_id, "ORCHESTRATOR", "INFO", f"Partitioned into {len(tasks)} chunks. Publishing to queue '{pool_id}'...")
     
-    # 5. Push Tasks to RabbitMQ
+    # 6. Push Tasks to RabbitMQ
     for task in tasks:
         rabbitmq_client.publish_task(
             pool_id=pool_id, 
             task_payload=task
         )
     
-    # 6. Update Status in DB
+    # 7. Update Status in DB
     await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing", "total_chunks": len(tasks), "completed_chunks": 0}})
     
     await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {len(tasks)} chunks queued. Job is now PROCESSING.")
     
-    return {"job_id": job_id, "status": "processing", "raw_data_url": raw_data_url}
+    return {"job_id": job_id, "status": "processing", "raw_data_url": raw_data_url, "partitions": len(tasks)}
 
 @router.put("/jobs/{job_id}/halt")
 async def halt_job(job_id: str):
@@ -197,41 +226,69 @@ async def delete_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
         
     await db.db.jobs.delete_one({"job_id": job_id})
-    # Also clean up events
     await db.db.job_events.delete_many({"job_id": job_id})
     return {"status": "deleted"}
 
-class TaskCompleteRequest(BaseModel):
-    total_chunks: int
-
 @router.post("/jobs/{job_id}/task_complete")
 async def task_complete(job_id: str, req: TaskCompleteRequest):
-    # Atomically increment completed_chunks
+    """
+    Called by workers upon finishing (or failing) a task.
+    Correctly distinguishes success vs failure without falsely inflating progress.
+    """
+    job = await db.db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    total = job.get("total_chunks") or req.total_chunks or 1
+
+    # Case A: Task Failed
+    if req.status == "failed":
+        result = await db.db.jobs.find_one_and_update(
+            {"job_id": job_id},
+            {"$inc": {"failed_chunks": 1}},
+            return_document=True
+        )
+        failed_count = result.get("failed_chunks", 1)
+        completed_count = result.get("completed_chunks", 0)
+        
+        await _emit_event(
+            job_id, 
+            "WORKER", 
+            "ERROR", 
+            f"Chunk {req.chunk_index} FAILED: {req.error_message or 'Unknown error'}",
+            req.worker_id
+        )
+
+        if completed_count + failed_count >= total:
+            status = "completed" if completed_count > 0 else "failed"
+            await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": status}})
+            if completed_count > 0:
+                await StateAggregator.stitch_results(job_id)
+
+        return {"status": "recorded_failure", "failed_chunks": failed_count}
+
+    # Case B: Task Succeeded
     result = await db.db.jobs.find_one_and_update(
         {"job_id": job_id},
         {"$inc": {"completed_chunks": 1}},
         return_document=True
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    completed = result.get("completed_chunks", 1)
-    total = result.get("total_chunks") or req.total_chunks or 1
     
-    # Calculate new progress accurately
+    completed = result.get("completed_chunks", 1)
+    failed = result.get("failed_chunks", 0)
     new_progress = min(100, int(round((completed / total) * 100)))
     
     update_data = {"progress": new_progress}
-    if completed >= total or new_progress >= 100:
+    if completed + failed >= total or new_progress >= 100:
         new_progress = 100
         update_data["progress"] = 100
         update_data["status"] = "completed"
-        await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {total} chunks completed. Job finished at 100%.")
-        
-    await db.db.jobs.update_one(
-        {"job_id": job_id},
-        {"$set": update_data}
-    )
+        await db.db.jobs.update_one({"job_id": job_id}, {"$set": update_data})
+        # Trigger background state stitcher
+        await StateAggregator.stitch_results(job_id)
+    else:
+        await db.db.jobs.update_one({"job_id": job_id}, {"$set": update_data})
+
     return {"status": "success", "progress": new_progress}
 
 # ── Event Log Endpoints ──
@@ -272,12 +329,28 @@ async def list_results(job_id: str):
 
 @router.get("/jobs/{job_id}/download")
 async def download_results(job_id: str):
-    """Zip all result files and stream as a download."""
+    """
+    Delivers the master stitched deliverable ZIP if generated,
+    or dynamically packages all result chunks.
+    """
+    job = await db.db.jobs.find_one({"job_id": job_id})
     files = storage.list_results(job_id)
     if not files:
         raise HTTPException(status_code=404, detail="No results found for this job")
-    
-    # Create zip in memory
+
+    # If master stitched archive exists, stream it directly
+    master_key = f"{job_id}/results/{job_id}_master_results.zip"
+    try:
+        master_bytes = storage.download_file(master_key)
+        return StreamingResponse(
+            io.BytesIO(master_bytes),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={job_id}_final_deliverable.zip"}
+        )
+    except Exception:
+        pass
+
+    # Fallback: Create zip in memory from all individual chunk files
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in files:
@@ -291,13 +364,46 @@ async def download_results(job_id: str):
         headers={"Content-Disposition": f"attachment; filename={job_id}_results.zip"}
     )
 
+# ── Worker Heartbeat & Registry Endpoints ──
+
 @router.post("/workers/register", response_model=WorkerRegisterResponse)
 async def register_worker(worker: WorkerRegisterRequest):
     worker_doc = worker.model_dump()
     worker_doc["status"] = "online"
+    worker_doc["last_heartbeat"] = datetime.now(timezone.utc).isoformat()
+    
+    # Register lease in Redis
+    redis_manager.renew_lease(worker.worker_id, worker.pool_id)
+    
     await db.db.workers.update_one(
         {"worker_id": worker.worker_id}, 
         {"$set": worker_doc}, 
         upsert=True
     )
-    return {"status": "registered", "heartbeat_interval": 10}
+    logger.info(f"Worker {worker.worker_id} registered with lease TTL {redis_manager.lease_ttl}s")
+    return {"status": "registered", "heartbeat_interval": 5}
+
+@router.post("/workers/{worker_id}/heartbeat", response_model=WorkerHeartbeatResponse)
+async def worker_heartbeat(worker_id: str, pool_id: str = Query("public_pool")):
+    """Ephemeral sliding-window heartbeat renewal (called every 5s by workers)."""
+    redis_manager.renew_lease(worker_id, pool_id)
+    await db.db.workers.update_one(
+        {"worker_id": worker_id},
+        {"$set": {"status": "online", "last_heartbeat": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "acknowledged", "acknowledged": True}
+
+@router.get("/workers")
+async def list_workers():
+    """Lists all cluster workers and checks their real-time Redis lease status."""
+    active_worker_ids = set(redis_manager.get_active_workers())
+    workers = []
+    cursor = db.db.workers.find().sort("worker_id", 1)
+    async for w in cursor:
+        w["_id"] = str(w["_id"])
+        # Node is strictly online if it holds an active Redis lease
+        is_live = w["worker_id"] in active_worker_ids
+        w["is_live"] = is_live
+        w["status"] = "online" if is_live else "offline"
+        workers.append(w)
+    return {"workers": workers, "active_count": len(active_worker_ids)}
