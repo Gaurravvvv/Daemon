@@ -3,6 +3,7 @@ import logging
 import io
 import json
 import zipfile
+import hashlib
 import numpy as np
 from datetime import datetime, timezone
 from services.database import db
@@ -41,8 +42,92 @@ class StateAggregator:
 
         try:
             with zipfile.ZipFile(master_zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                # 0. Structured CSV Cleaning Workloads: Concatenate clean chunks & compile audit summary
+                if job_type in ("csv", "csv_cleaning", "tabular", "data_cleaning"):
+                    csv_chunks = []
+                    audit_payloads = []
+
+                    for f in files:
+                        fname = f["filename"]
+                        file_bytes = storage.download_file(f["key"])
+                        if fname.startswith("cleaned_chunk_") and fname.endswith(".csv"):
+                            idx_str = fname.replace("cleaned_chunk_", "").replace(".csv", "")
+                            try:
+                                chunk_idx = int(idx_str)
+                            except ValueError:
+                                chunk_idx = 0
+                            csv_chunks.append((chunk_idx, file_bytes.decode("utf-8", errors="replace")))
+                        elif fname.startswith("audit_chunk_") and fname.endswith(".json"):
+                            try:
+                                audit_payloads.append(json.loads(file_bytes.decode("utf-8", errors="replace")))
+                            except Exception:
+                                pass
+                        
+                        # Archive raw chunk slice in deliverable
+                        zf.writestr(f"slices/{fname}", file_bytes)
+
+                    # Sort clean chunks in numerical sequence
+                    csv_chunks.sort(key=lambda x: x[0])
+                    master_csv_buffer = io.StringIO()
+                    header_written = False
+                    total_clean_rows = 0
+                    global_seen_hashes = set()
+                    cross_chunk_dups = 0
+
+                    for chunk_idx, csv_text in csv_chunks:
+                        lines = [line for line in csv_text.splitlines() if line.strip()]
+                        if not lines:
+                            continue
+                        if not header_written:
+                            master_csv_buffer.write(lines[0] + "\n")
+                            header_written = True
+                        for row_line in lines[1:]:
+                            # Cross-chunk deduplication pass
+                            row_hash = hashlib.md5(row_line.strip().encode("utf-8")).hexdigest()
+                            if row_hash in global_seen_hashes:
+                                cross_chunk_dups += 1
+                                continue
+                            global_seen_hashes.add(row_hash)
+                            master_csv_buffer.write(row_line + "\n")
+                            total_clean_rows += 1
+
+                    master_csv_str = master_csv_buffer.getvalue()
+                    zf.writestr(f"cleaned_master_{job_id}.csv", master_csv_str.encode("utf-8"))
+
+                    # Aggregate audit telemetry
+                    total_input = sum(a.get("input_rows", 0) for a in audit_payloads)
+                    total_dups = sum(a.get("duplicates_removed", 0) for a in audit_payloads) + cross_chunk_dups
+                    total_nulls = sum(a.get("null_cells_cleaned", 0) for a in audit_payloads)
+                    total_pii = sum(a.get("pii_masked", 0) for a in audit_payloads)
+                    total_corrupt = sum(a.get("corrupt_rows_dropped", 0) for a in audit_payloads)
+                    total_compute_time = round(sum(a.get("duration_seconds", 0.0) for a in audit_payloads), 3)
+                    avg_throughput = int(total_input / max(total_compute_time, 0.001)) if total_compute_time > 0 else 0
+                    retention_rate = round((total_clean_rows / max(total_input, 1)) * 100, 2)
+                    col_names = audit_payloads[0].get("column_names", []) if audit_payloads else []
+
+                    cleaning_summary = {
+                        "job_id": job_id,
+                        "job_name": job.get("job_name", ""),
+                        "dataset_type": "Structured (CSV)",
+                        "total_input_rows": total_input,
+                        "total_clean_rows": total_clean_rows,
+                        "retention_rate_pct": retention_rate,
+                        "total_duplicates_removed": total_dups,
+                        "total_null_cells_sanitized": total_nulls,
+                        "total_pii_entities_masked": total_pii,
+                        "total_corrupt_rows_dropped": total_corrupt,
+                        "total_cleaning_time_seconds": total_compute_time,
+                        "aggregate_cluster_throughput_rows_per_sec": avg_throughput,
+                        "total_columns": len(col_names),
+                        "columns": col_names
+                    }
+                    zf.writestr("cleaning_audit_summary.json", json.dumps(cleaning_summary, indent=2).encode("utf-8"))
+                    summary_metadata["cleaning_summary"] = cleaning_summary
+                    summary_metadata["clean_rows"] = total_clean_rows
+                    summary_metadata["duplicates_removed"] = total_dups
+
                 # 1. Math / Matrix Workloads: Stitch sub-blocks into full composite matrix
-                if job_type in ("math", "matrix", "matrix_multiplication"):
+                elif job_type in ("math", "matrix", "matrix_multiplication"):
                     slices = []
                     total_time_ms = 0
                     monte_carlo_estimates = []
@@ -127,24 +212,34 @@ class StateAggregator:
             master_key = f"{job_id}/results/{job_id}_master_results.zip"
             final_url = storage.upload_bytes(master_zip_bytes, master_key, content_type="application/zip")
 
+            update_doc = {
+                "status": "completed",
+                "progress": 100,
+                "final_result_url": final_url,
+                "stitched": True,
+                "stitched_at": datetime.now(timezone.utc).isoformat()
+            }
+            if "cleaning_summary" in summary_metadata:
+                update_doc["audit_summary"] = summary_metadata["cleaning_summary"]
+
             await db.db.jobs.update_one(
                 {"job_id": job_id},
-                {"$set": {
-                    "status": "completed",
-                    "progress": 100,
-                    "final_result_url": final_url,
-                    "stitched": True,
-                    "stitched_at": datetime.now(timezone.utc).isoformat()
-                }}
+                {"$set": update_doc}
             )
 
             # Emit success event to timeline
+            if "cleaning_summary" in summary_metadata:
+                audit = summary_metadata["cleaning_summary"]
+                msg = f"Dataset cleaning complete! {audit['total_clean_rows']} clean rows produced ({audit['total_duplicates_removed']} duplicates dropped, {audit['total_pii_entities_masked']} PII scrubbed, {audit['total_null_cells_sanitized']} nulls sanitized). Deliverable ready for download."
+            else:
+                msg = f"Artifacts successfully stitched into master archive ({len(files)} files, {len(master_zip_bytes)//1024} KB). Ready for download."
+
             event = {
                 "job_id": job_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "source": "ORCHESTRATOR",
                 "level": "SUCCESS",
-                "message": f"Artifacts successfully stitched into master archive ({len(files)} files, {len(master_zip_bytes)//1024} KB). Ready for download."
+                "message": msg
             }
             await db.db.job_events.insert_one(event)
             logger.info(f"Job {job_id} successfully stitched into {final_url}!")

@@ -3,47 +3,34 @@
 > **Document Type:** Project Memory & Execution State (`STATE.md`)  
 > **Repository:** `Gaurravvvv/Daemon`  
 > **Last Updated:** November 2026  
-> **Overall Progress:** **~88% Complete**  
+> **Overall Progress:** **Phase 1 (Structured CSV Cleaning) Complete & Verified**  
 
 ---
 
 ## 1. Current Status Summary
 
-- **Active Milestone:** Milestone 4 (Output Stitching & Result Aggregation) & Milestone 5 (Resilience)
-- **Active Branch:** `main` (clean, uncommitted changes ready for review)
-- **Resolved Blockers & Completed Gaps:**
-  - ✅ **Parameter Alignment:** Form `split_count` and API `max_workers` unified, respecting custom partition counts.
-  - ✅ **Worker Error & Progress Handling:** Worker NACKs on transient failures, tracks retry limits ($R_{\text{max}}=2$), and orchestrator distinguishes failed chunks from successful completion.
-  - ✅ **Matrix Strategy Wired:** `MatrixMultiplicationStrategy` integrated with CuPy GPU acceleration and NumPy BLAS CPU fallback.
-  - ✅ **Crypto Strategy Implemented:** `CryptoSearchStrategy` operational with SHA-256 pre-image discovery, PoW nonce search, and throughput logging (H/s).
-  - ✅ **Worker Storage Leaks Fixed:** All strategies clean up temporary extraction folders in `finally:` blocks.
-  - ✅ **State Aggregator & Stitcher:** Full artifact consolidation implemented for matrix stacking, cryptographic summaries, and image bundles in `orchestrator/core/aggregator.py`.
-  - ✅ **Sliding-Window Heartbeat Leasing:** Redis lease manager (`15s` TTL) and worker background heartbeat thread (`5s` interval) online with node reaper.
-  - ✅ **Docker Compose Volume Portability:** MinIO mapped to Docker named volume `minio_data`.
-  - ✅ **Dashboard Active Worker Display:** Real-time active node count wired to Next.js header KPI.
-- **Immediate Next Tasks:**
-  - 1. Interactive brainstorming on architectural enhancements, evaluation metrics, and capstone presentation alignment.
-  - 2. Implement WebSocket telemetry (`/ws/jobs/{id}`) for zero-latency dashboard streaming.
-  - 3. Run automated empirical Amdahl's Law benchmark suite.
+- **Active Milestone:** Milestone-ETL (Distributed Dataset Cleaning Grid)
+- **Completed Phase:** Phase 1: Structured Data (CSV) Cleaning Engine (100% Tested & Verified)
+- **Next Phase:** Phase 2: Unstructured Data (Text/JSONL) Cleaning Engine
+- **Git Commit State:** Uncommitted / Unstaged (Maintained clean working tree per user directive, no auto-commits)
+- **Delivered Capabilities:**
+  - Streaming line-preserving CSV splitter (`orchestrator/core/csv_splitter.py`)
+  - Universal schema-agnostic worker cleaning strategy (`worker/strategies/csv_cleaning.py`)
+  - Sequential aggregator with cross-chunk deduplication & audit metrics (`orchestrator/core/aggregator.py`)
+  - Web UI for CSV submission and Executive Audit telemetry (`dashboard/`) with viewport lock, fixed-height scrolling terminal feeds, and responsive card scaling
+  - Standalone Docker worker image (`daemon-worker:latest`) containing all compute strategies
+  - Dedicated Windows launchers: `start.bat` (master launcher with venv activation) and `start_worker.bat` (native GPU worker)
+  - End-to-end integration test suite (`tests/test_csv_cleaning_e2e.py`)
+  - Synthetic benchmark dataset generator (`generate_dirty_csv.py`)
+  - Updated `.gitignore` excluding 50MB+ datasets and runtime payload archives
 
 ---
 
-## 2. Completed Phases Audit
+## 2. Next Milestones & Phases
 
-| Phase | Milestone | Completion Date | Deliverables |
-| :--- | :--- | :--- | :--- |
-| **Phase 1: Core Infrastructure** | M1 | Oct 2026 | `docker-compose.yml`, MinIO S3 mapping, RabbitMQ queues. |
-| **Phase 2: Orchestrator Brain** | M1 | Oct 2026 | `orchestrator/api/routes.py`, `splitter.py`, MongoDB async client. |
-| **Phase 3: Worker Daemon & GPU** | M2 | Oct 2026 | `worker/main.py`, `consumer.py`, `image_processing.py` (CUDA 12.4 + CuPy). |
-| **Phase 4: Dashboard & Role Gateway** | M1 | Oct 2026 | Next.js 15+ App Router, Role Gateway, live terminal log feed. |
-| **Phase 5: Codebase Intelligence** | - | Oct 2026 | `.planning/codebase/` (STACK, INTEGRATIONS, ARCHITECTURE, etc.). |
-| **Phase 6: Matrix Strategy Engine** | M3 | Oct 2026 | `worker/strategies/matrix_strategy.py`. |
-| **Phase 7: Gap Closure & Resilience** | M3/M4/M5 | Nov 2026 | Crypto search strategy, Redis heartbeats, real aggregator stitcher, worker retry & disk leak fixes. |
-
----
-
-## 3. Quick Tasks Completed
-
-| Quick Task | Date | Status | Summary |
-| :--- | :--- | :--- | :--- |
-| `20261107-fill-daemon-gaps` | 2026-11-07 | complete ✓ | Resolved 10 core architectural gaps: parameter alignment, worker retry handling, crypto strategy, real aggregator stitching, Redis heartbeats, and disk cleanup. |
+- **Phase 2 (Ready for Execution when requested):** Distributed Unstructured Data (Text / JSONL) Cleaning Engine (`.planning/phases/02-unstructured-data-cleaning/PLAN.md`)
+  - JSONL / raw text streaming chunker
+  - Worker deduplication (MinHash / exact hash)
+  - Worker boilerplate/HTML/markdown stripper
+  - Toxic / low-quality / empty text filtering
+  - Unified cleaned text aggregator with corpus audit report

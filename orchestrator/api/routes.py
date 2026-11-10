@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
+import os
 import io
+import json
+import tempfile
 import zipfile
 from typing import List, Optional, Dict, Any
 import uuid
@@ -21,6 +24,7 @@ from services.rabbitmq import rabbitmq_client
 from services.storage import storage
 from services.redis_client import redis_manager
 from core.splitter import TaskSplitter
+from core.csv_splitter import CSVSplitter
 from core.aggregator import StateAggregator
 from services.database import db
 
@@ -30,6 +34,8 @@ logger = logging.getLogger(__name__)
 def _normalize_job_type(raw_type: str) -> str:
     """Normalize polymorphic job type strings across dashboard, schemas, and workers."""
     cleaned = str(raw_type).lower().strip()
+    if cleaned in ("csv", "csv_cleaning", "tabular", "data_cleaning", "structured"):
+        return "csv_cleaning"
     if cleaned in ("image", "image_processing"):
         return "image"
     if cleaned in ("math", "matrix", "matrix_multiplication"):
@@ -147,18 +153,22 @@ async def upload_and_submit(
     split_count: Optional[int] = Form(None),
     compute_mode: str = Form("any"),
     password: Optional[str] = Form(None),
+    rules_json: Optional[str] = Form(None),
     file: UploadFile = File(...)
 ):
     # 1. Resolve partition count (accepts either split_count from UI or max_workers)
     partitions = split_count if split_count is not None else (max_workers if max_workers is not None else 10)
     normalized_type = _normalize_job_type(job_type)
+    if file.filename.lower().endswith(".csv"):
+        normalized_type = "csv_cleaning"
 
     # 2. Generate unique Job ID
     job_id = f"job-{random.randint(1000, 9999)}"
     
-    # 3. Upload the raw data to MinIO
+    # 3. Stage the raw data in MinIO
+    file_bytes = await file.read()
     object_name = f"{job_id}/{file.filename}"
-    raw_data_url = await storage.upload_file(file, object_name)
+    raw_data_url = storage.upload_bytes(file_bytes, object_name, content_type=file.content_type or "text/csv")
     
     # 4. Save Initial Job State to MongoDB
     job_doc = {
@@ -181,19 +191,47 @@ async def upload_and_submit(
     await db.db.jobs.insert_one(job_doc)
     
     compute_label = {"gpu_only": "GPU Only", "cpu_only": "CPU Only", "any": "Hybrid"}.get(compute_mode, compute_mode)
-    await _emit_event(job_id, "ORCHESTRATOR", "SYSTEM", f"Job '{job_name}' created [{compute_label}]. Slicing into {partitions} partitions...")
+    await _emit_event(job_id, "ORCHESTRATOR", "SYSTEM", f"Job '{job_name}' created [{compute_label}]. Slicing dataset into {partitions} partitions...")
     
     # 5. Partition the Job into Micro-Tasks
-    tasks = TaskSplitter.partition_job(
-        job_id=job_id, 
-        raw_data_url=raw_data_url, 
-        job_type=normalized_type,
-        parameters={"max_workers": partitions},
-        split_count=partitions,
-        compute_mode=compute_mode
-    )
+    if normalized_type == "csv_cleaning":
+        import tempfile
+        temp_dir = os.path.join(tempfile.gettempdir(), "daemon_uploads")
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_csv_path = os.path.join(temp_dir, f"{job_id}_{file.filename}")
+        
+        with open(temp_csv_path, "wb") as tf:
+            tf.write(file_bytes)
+            
+        cleaning_rules = {}
+        if rules_json:
+            try:
+                cleaning_rules = json.loads(rules_json)
+            except Exception:
+                pass
+                
+        tasks = CSVSplitter.partition_csv(
+            job_id=job_id,
+            csv_file_path=temp_csv_path,
+            split_count=partitions,
+            rules=cleaning_rules or None
+        )
+        
+        try:
+            os.remove(temp_csv_path)
+        except Exception:
+            pass
+    else:
+        tasks = TaskSplitter.partition_job(
+            job_id=job_id, 
+            raw_data_url=raw_data_url, 
+            job_type=normalized_type,
+            parameters={"max_workers": partitions},
+            split_count=partitions,
+            compute_mode=compute_mode
+        )
     
-    await _emit_event(job_id, "ORCHESTRATOR", "INFO", f"Partitioned into {len(tasks)} chunks. Publishing to queue '{pool_id}'...")
+    await _emit_event(job_id, "ORCHESTRATOR", "INFO", f"Partitioned into {len(tasks)} chunks. Publishing manifests to queue '{pool_id}'...")
     
     # 6. Push Tasks to RabbitMQ
     for task in tasks:
@@ -205,7 +243,7 @@ async def upload_and_submit(
     # 7. Update Status in DB
     await db.db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "processing", "total_chunks": len(tasks), "completed_chunks": 0}})
     
-    await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {len(tasks)} chunks queued. Job is now PROCESSING.")
+    await _emit_event(job_id, "ORCHESTRATOR", "SUCCESS", f"All {len(tasks)} chunks queued. Distributed execution is now PROCESSING.")
     
     return {"job_id": job_id, "status": "processing", "raw_data_url": raw_data_url, "partitions": len(tasks)}
 

@@ -1,30 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function RoleSelect() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<"none" | "worker" | "orchestrator">("none");
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (role === "orchestrator") {
       if (id === "admin" && password === "admin") {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("daemon_role", "orchestrator");
+        }
         router.push("/orchestrator");
       } else {
         setError("Invalid credentials. Default is admin / admin");
       }
     } else {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("daemon_role", "worker");
+      }
       router.push("/worker");
     }
   };
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4" suppressHydrationWarning>
       <div className="w-full max-w-md border border-border-base bg-surface rounded-[20px] shadow-xl p-6 sm:p-8 relative">
         
         <div className="flex flex-col items-center mb-6 sm:mb-8 text-center">

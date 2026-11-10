@@ -17,7 +17,9 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
   const resolvedParams = use(params);
   const [job, setJob] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
   const [events, setEvents] = useState<EventLog[]>([]);
+  const [levelFilter, setLevelFilter] = useState("ALL");
   const lastTimestampRef = useRef<string | null>(null);
   const terminalLogsRef = useRef<HTMLDivElement>(null);
 
@@ -67,66 +69,99 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
     }
   }, [events]);
 
+  const [attachMode, setAttachMode] = useState<"script" | "docker">("script");
+  const nativeCommand = `start_worker.bat`;
   const dockerCommand = `docker run --rm -it --gpus all --add-host=host.docker.internal:host-gateway -e POOL_ID="${job?.pool_id || "public_pool"}" daemon-worker`;
 
   const copyCommand = () => {
-    navigator.clipboard.writeText(dockerCommand);
+    navigator.clipboard.writeText(attachMode === "script" ? nativeCommand : dockerCommand);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const copyAllLogs = () => {
+    const text = events.map(e => `[${new Date(e.timestamp).toISOString()}] [${e.source}] [${e.level}] ${e.message}`).join("\n");
+    navigator.clipboard.writeText(text);
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
+  const formatStrategyName = (type: string) => {
+    switch ((type || "").toLowerCase()) {
+      case "csv_cleaning":
+      case "csv":
+      case "tabular":
+      case "data_cleaning":
+        return "CSV Dataset Cleaning";
+      case "math":
+      case "matrix":
+        return "Matrix Compute";
+      case "image":
+        return "Image Processing";
+      case "crypto":
+        return "Cryptography";
+      default:
+        return type || "Compute";
+    }
+  };
+
   const getLogColor = (level: string) => {
-    switch (level) {
+    switch (level?.toUpperCase()) {
       case "SUCCESS": return "text-success-emerald";
       case "WARNING": return "text-amber-400";
-      case "ERROR": return "text-error-crimson";
+      case "ERROR": return "text-error-crimson font-semibold";
       case "SYSTEM": return "text-primary";
       case "INFO": return "text-secondary";
       default: return "text-foreground";
     }
   };
 
+  const filteredEvents = events.filter(e => {
+    if (levelFilter !== "ALL" && e.level?.toUpperCase() !== levelFilter) return false;
+    return true;
+  });
+
   return (
-    <div className="flex flex-col md:flex-row gap-6 md:h-[calc(100vh-130px)] md:min-h-[500px]">
+    <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 flex-1 min-h-0 lg:h-[calc(100vh-125px)]" suppressHydrationWarning>
       
       {/* Left Column: Details & Instructions */}
-      <div className="w-full md:flex-1 min-w-0 flex flex-col gap-5 overflow-y-auto custom-scrollbar md:h-full pr-0 md:pr-1">
+      <div className="w-full lg:w-[48%] flex flex-col gap-4 sm:gap-5 lg:h-full overflow-y-auto custom-scrollbar pr-0 lg:pr-2 min-h-0 shrink-0">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
-          <div>
-            <Link href="/worker" className="text-secondary hover:text-primary micro-label inline-flex items-center gap-1.5 mb-2 transition-colors">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 shrink-0">
+          <div className="min-w-0">
+            <Link href="/worker" className="text-secondary hover:text-primary micro-label inline-flex items-center gap-1.5 mb-1.5 transition-colors">
               <span className="material-symbols-outlined text-[15px]">arrow_back</span>
               Back to Global Pool
             </Link>
-            <h1 className="text-2xl font-bold title-tight text-primary mb-1 break-words">{job?.job_name || "Compute Job"}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold title-tight text-primary mb-1 break-words">{job?.job_name || "Compute Job"}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
-              <span className="ide-chip text-[10px] text-secondary">
+              <span className="ide-chip text-[10px] text-secondary font-mono">
                 POOL: {job?.pool_id || "public_pool"}
               </span>
-              <span className="ide-chip text-[10px] uppercase text-primary border-primary/30">
-                {job?.job_type || "Compute"}
+              <span className="ide-chip text-[10px] text-foreground font-medium">
+                {formatStrategyName(job?.job_type)}
               </span>
             </div>
           </div>
           
           <button 
             onClick={copyCommand}
-            className={`btn-interactive px-4 py-2 border micro-label rounded-[8px] inline-flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 w-full sm:w-auto ${
+            className={`btn-interactive px-4 py-2 border micro-label rounded-[8px] inline-flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 w-full sm:w-auto font-bold ${
               copied 
                 ? "bg-success-emerald text-on-primary border-success-emerald" 
-                : "bg-primary text-on-primary border-primary hover:opacity-90 font-bold"
+                : "bg-primary text-on-primary border-primary hover:opacity-90"
             }`}
           >
             <span className="material-symbols-outlined text-[16px]">{copied ? "check" : "content_copy"}</span>
-            {copied ? "Copied Command!" : "Copy Docker Run"}
+            {copied ? "Command Copied" : attachMode === "script" ? "Copy Batch Command" : "Copy Docker Run"}
           </button>
         </div>
 
         {/* Task Details Card */}
-        <div className="card-interactive bg-surface border border-border-base rounded-[16px] p-4 sm:p-5 shadow-sm">
+        <div className="card-interactive bg-surface border border-border-base rounded-[16px] p-4 sm:p-5 shadow-sm shrink-0">
           <div className="flex items-center gap-2 border-b border-border-base pb-3 mb-4">
-            <span className="material-symbols-outlined text-primary text-[16px]">tune</span>
+            <span className="material-symbols-outlined text-primary text-[18px]">tune</span>
             <h2 className="micro-label font-bold text-foreground">Task Specifications</h2>
           </div>
 
@@ -137,7 +172,7 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
                 <span className="truncate">{job?.raw_data_url || "Awaiting payload upload..."}</span>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 bg-surface-container rounded-[10px] border border-border-base">
                 <span className="micro-label text-secondary block mb-1">Progress</span>
@@ -145,17 +180,17 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
               </div>
               <div className="p-3 bg-surface-container rounded-[10px] border border-border-base">
                 <span className="micro-label text-secondary block mb-1">Status</span>
-                <span className={`ide-chip mt-0.5 text-[10px] uppercase ${
-                  job?.status === 'completed' ? 'border-success-emerald/40 text-success-emerald' :
-                  job?.status === 'halted' ? 'border-error-crimson/40 text-error-crimson' :
-                  'border-primary/40 text-primary'
+                <span className={`ide-chip mt-0.5 text-[10px] uppercase font-bold ${
+                  job?.status === 'completed' ? 'border-primary text-primary' :
+                  job?.status === 'halted' ? 'border-error-crimson text-error-crimson' :
+                  'border-success-emerald text-success-emerald'
                 }`}>
                   {job?.status || "partitioning"}
                 </span>
               </div>
               <div className="p-3 bg-surface-container rounded-[10px] border border-border-base">
-                <span className="micro-label text-secondary block mb-1">Mode</span>
-                <span className={`ide-chip mt-0.5 text-[10px] uppercase ${
+                <span className="micro-label text-secondary block mb-1">Compute Mode</span>
+                <span className={`ide-chip mt-0.5 text-[10px] ${
                   job?.compute_mode === 'gpu_only' ? 'border-amber-400/40 text-amber-400' :
                   job?.compute_mode === 'cpu_only' ? 'border-blue-400/40 text-blue-400' :
                   'border-success-emerald/40 text-success-emerald'
@@ -170,62 +205,116 @@ export default function WorkerJobDetails({ params }: { params: Promise<{ id: str
         </div>
 
         {/* Onboarding Instructions */}
-        <div className="bg-surface border border-border-base rounded-[16px] p-4 sm:p-5 shadow-sm mt-auto">
-          <div className="flex items-center gap-2 border-b border-border-base pb-3 mb-4">
-            <span className="material-symbols-outlined text-primary text-[16px]">terminal</span>
-            <h2 className="micro-label font-bold text-foreground">Worker Node Attachment</h2>
+        <div className="bg-surface border border-border-base rounded-[16px] p-4 sm:p-5 shadow-sm mt-auto shrink-0">
+          <div className="flex items-center justify-between border-b border-border-base pb-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-[18px]">terminal</span>
+              <h2 className="micro-label font-bold text-foreground">Worker Node Attachment</h2>
+            </div>
+            
+            {/* Attachment Mode Switcher */}
+            <div className="flex items-center gap-1 bg-surface-container p-1 rounded-[8px] border border-border-base">
+              <button
+                type="button"
+                onClick={() => setAttachMode("script")}
+                className={`px-2.5 py-0.5 text-[11px] font-mono rounded-[6px] transition-all ${
+                  attachMode === "script" 
+                    ? "bg-primary text-on-primary font-bold shadow-xs" 
+                    : "text-secondary hover:text-foreground"
+                }`}
+              >
+                Native Batch
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttachMode("docker")}
+                className={`px-2.5 py-0.5 text-[11px] font-mono rounded-[6px] transition-all ${
+                  attachMode === "docker" 
+                    ? "bg-primary text-on-primary font-bold shadow-xs" 
+                    : "text-secondary hover:text-foreground"
+                }`}
+              >
+                Docker
+              </button>
+            </div>
           </div>
 
-          <ol className="space-y-4 font-sans text-sm text-secondary list-decimal list-inside">
-            <li>
-              <span className="font-semibold text-foreground">Ensure Docker Daemon is Running</span>
-              <p className="pl-0 sm:pl-5 mt-1 text-xs">Verify Docker Desktop or Docker Engine is active with container virtualization support.</p>
-            </li>
-            <li>
-              <span className="font-semibold text-foreground">Execute Worker Container</span>
-              <div className="mt-2 ml-0 sm:ml-5 p-3 bg-surface-container border border-border-base rounded-[8px] font-mono text-[11px] text-primary break-all relative select-all overflow-x-auto">
+          {attachMode === "script" ? (
+            <div className="space-y-3 font-sans text-xs text-secondary">
+              <p>Execute the volunteer worker node directly on your host operating system using the dedicated launcher:</p>
+              <div className="p-3 bg-surface-container border border-border-base rounded-[8px] font-mono text-[11px] text-primary break-all select-all">
+                {nativeCommand}
+              </div>
+              <p className="text-[11px] text-secondary">
+                This automatically activates the local virtual environment, detects CUDA GPU hardware (RTX), and streams chunk events directly to the grid.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 font-sans text-xs text-secondary">
+              <p>Run the containerized worker node from any terminal or directory:</p>
+              <div className="p-3 bg-surface-container border border-border-base rounded-[8px] font-mono text-[11px] text-primary break-all select-all overflow-x-auto">
                 {dockerCommand}
               </div>
-              <p className="pl-0 sm:pl-5 mt-1.5 text-[11px] text-secondary font-mono">
-                * To run on CPU-only machines, simply remove <code className="text-primary font-bold">--gpus all</code>.
+              <p className="text-[11px] text-secondary">
+                The image contains all compute strategies. To run on CPU-only machines, remove <code className="text-primary font-bold">--gpus all</code>.
               </p>
-            </li>
-            <li>
-              <span className="font-semibold text-foreground">Real-time Stream Verification</span>
-              <p className="pl-0 sm:pl-5 mt-1 text-xs">Your node will register, transmit heartbeats, and pull chunks automatically.</p>
-            </li>
-          </ol>
+            </div>
+          )}
         </div>
 
       </div>
 
       {/* Right Column: Live Terminal Feed */}
-      <div className="w-full md:flex-1 min-w-0 h-[420px] sm:h-[480px] md:h-full bg-surface border border-border-base rounded-[16px] flex flex-col overflow-hidden shadow-xl">
-        <div className="bg-surface-container border-b border-border-base px-4 py-3 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
+      <div className="w-full lg:flex-1 min-w-0 h-[480px] lg:h-full bg-surface border border-border-base rounded-[16px] flex flex-col overflow-hidden shadow-xl shrink-0 lg:shrink">
+        <div className="bg-surface-container border-b border-border-base px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex gap-1.5 shrink-0">
               <div className="w-2.5 h-2.5 rounded-full bg-error-crimson/80 border border-error-crimson"></div>
               <div className="w-2.5 h-2.5 rounded-full bg-amber-400/80 border border-amber-400"></div>
               <div className="w-2.5 h-2.5 rounded-full bg-success-emerald/80 border border-success-emerald"></div>
             </div>
-            <span className="micro-label text-secondary ml-1 truncate">Live Worker Event Stream</span>
+            <span className="micro-label text-foreground font-bold ml-1 truncate">Worker Telemetry Stream</span>
           </div>
-          <span className="ide-chip text-[10px] text-secondary shrink-0">{events.length} events</span>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value)}
+              className="h-7 bg-surface border border-border-base text-[10px] font-mono text-secondary rounded-[6px] px-2 focus:outline-none focus:border-primary cursor-pointer"
+            >
+              <option value="ALL">All Levels</option>
+              <option value="INFO">Info</option>
+              <option value="SUCCESS">Success</option>
+              <option value="WARNING">Warning</option>
+              <option value="ERROR">Error</option>
+            </select>
+
+            <button
+              onClick={copyAllLogs}
+              className="h-7 px-2.5 text-[10px] font-mono border border-border-base hover:border-primary text-secondary hover:text-primary rounded-[6px] bg-surface inline-flex items-center gap-1 transition-colors"
+              title="Copy All Logs"
+            >
+              <span className="material-symbols-outlined text-[12px]">{copiedLogs ? "check" : "content_copy"}</span>
+              {copiedLogs ? "Copied" : "Copy"}
+            </button>
+
+            <span className="ide-chip text-[10px] text-secondary shrink-0">{filteredEvents.length} events</span>
+          </div>
         </div>
         
         <div ref={terminalLogsRef} className="p-4 flex-1 min-h-0 overflow-y-auto font-mono text-xs custom-scrollbar bg-bg-subtle">
-          {events.length === 0 && (
-            <div className="text-secondary/70 py-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-              Awaiting worker event packets...
+          {filteredEvents.length === 0 && (
+            <div className="text-secondary/70 py-6 text-center flex flex-col items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-2xl text-secondary/40 animate-spin">sync</span>
+              <span>Awaiting worker node event packets...</span>
             </div>
           )}
-          {events.map((evt, idx) => {
+          {filteredEvents.map((evt, idx) => {
             const time = new Date(evt.timestamp).toLocaleTimeString();
             return (
-              <div key={idx} className="mb-2 flex items-start gap-2.5 leading-relaxed">
-                <span className="text-secondary/60 select-none shrink-0 text-[11px] font-mono">[{time}]</span>
-                <span className="ide-chip text-[10px] py-0 px-1.5 shrink-0 border-border-base">
+              <div key={idx} className="mb-1.5 flex items-start gap-2 leading-relaxed text-[11px] sm:text-xs hover:bg-surface-container/30 px-1 rounded transition-colors">
+                <span className="text-secondary/60 select-none shrink-0 text-[10px] font-mono">[{time}]</span>
+                <span className="ide-chip text-[9px] py-0 px-1.5 shrink-0 border-border-base/70">
                   {evt.source}
                 </span>
                 <span className={`${getLogColor(evt.level)} break-all`}>

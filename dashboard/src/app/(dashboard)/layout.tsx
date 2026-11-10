@@ -19,56 +19,92 @@ export default function DashboardLayout({
   useEffect(() => setMounted(true), []);
   useEffect(() => setMobileMenuOpen(false), [pathname]);
 
+  const handleSignOut = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("daemon_role");
+    }
+  };
+
+  if (!mounted) {
+    return (
+      <div 
+        className="flex h-screen max-h-screen overflow-hidden bg-background" 
+        suppressHydrationWarning 
+      />
+    );
+  }
+
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-background">
-      {/* Side Navigation (Desktop) */}
-      <aside className="w-16 h-screen sticky left-0 top-0 border-r border-border-base flex flex-col items-center py-4 gap-4 bg-surface transition-colors duration-150 ease-in-out hidden md:flex z-40 shrink-0">
+    <div 
+      className="flex h-screen max-h-screen overflow-hidden bg-background" 
+      suppressHydrationWarning
+    >
+      {/* Side Navigation (Desktop) - Strictly Role-Isolated */}
+      <aside className="w-16 h-screen border-r border-border-base flex flex-col items-center py-4 gap-4 bg-surface transition-colors duration-150 ease-in-out hidden md:flex z-40 shrink-0">
         <div className="mb-2">
           <Link 
-            href="/role-select" 
+            href={isOrchestrator ? "/orchestrator" : "/worker"} 
             className="w-10 h-10 rounded-[10px] border border-border-base hover:border-primary flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 bg-surface-container"
-            title="DaeMon Gateway"
+            title={isOrchestrator ? "DaeMon Orchestrator Console" : "DaeMon Worker Pool"}
           >
             <span className="font-mono text-base font-extrabold text-primary">D</span>
           </Link>
         </div>
         
+        {/* Navigation - Displays ONLY the active role's dedicated tools */}
         <nav className="flex flex-col gap-2 flex-grow">
-          <Link 
-            href="/orchestrator" 
-            className={`w-10 h-10 flex items-center justify-center transition-all duration-150 rounded-[10px] border ${
-              isOrchestrator 
-                ? "bg-primary text-on-primary border-primary shadow-sm" 
-                : "text-secondary border-transparent hover:text-primary hover:border-border-base hover:bg-surface-container"
-            }`}
-            title="Orchestrator Console"
-          >
-            <span className="material-symbols-outlined text-[18px]">dashboard</span>
-          </Link>
-          <Link 
-            href="/worker" 
-            className={`w-10 h-10 flex items-center justify-center transition-all duration-150 rounded-[10px] border ${
-              !isOrchestrator 
-                ? "bg-primary text-on-primary border-primary shadow-sm" 
-                : "text-secondary border-transparent hover:text-primary hover:border-border-base hover:bg-surface-container"
-            }`}
-            title="Worker Node Pool"
-          >
-            <span className="material-symbols-outlined text-[18px]">public</span>
-          </Link>
+          {isOrchestrator ? (
+            /* Orchestrator Master Exclusive Tools */
+            <>
+              <Link 
+                href="/orchestrator" 
+                className="w-10 h-10 flex items-center justify-center transition-all duration-150 rounded-[10px] border bg-primary text-on-primary border-primary shadow-sm"
+                title="Orchestrator Console (Dispatched Jobs)"
+              >
+                <span className="material-symbols-outlined text-[18px]">dashboard</span>
+              </Link>
+              <a 
+                href="http://localhost:8000/docs" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-10 h-10 flex items-center justify-center transition-all duration-150 rounded-[10px] border text-secondary border-transparent hover:text-primary hover:border-border-base hover:bg-surface-container"
+                title="FastAPI Swagger API Documentation"
+              >
+                <span className="material-symbols-outlined text-[18px]">api</span>
+              </a>
+            </>
+          ) : (
+            /* Worker Node Exclusive Tools */
+            <>
+              <Link 
+                href="/worker" 
+                className="w-10 h-10 flex items-center justify-center transition-all duration-150 rounded-[10px] border bg-primary text-on-primary border-primary shadow-sm"
+                title="Volunteer Worker Compute Pool"
+              >
+                <span className="material-symbols-outlined text-[18px]">public</span>
+              </Link>
+              <div 
+                className="w-10 h-10 flex items-center justify-center rounded-[10px] text-secondary border border-transparent bg-surface-container/50"
+                title="Node Connected as Compute Volunteer"
+              >
+                <span className="material-symbols-outlined text-[18px]">memory</span>
+              </div>
+            </>
+          )}
         </nav>
         
-        {/* Disconnect */}
+        {/* Exit / Sign Out to Gateway */}
         <Link 
           href="/role-select" 
+          onClick={handleSignOut}
           className="mt-auto w-10 h-10 flex items-center justify-center text-secondary hover:text-error-crimson hover:bg-error-crimson/10 border border-transparent hover:border-error-crimson/30 transition-all rounded-[10px]" 
-          title="Disconnect from Cluster"
+          title={isOrchestrator ? "Sign Out of Orchestrator Console" : "Disconnect from Worker Pool"}
         >
           <span className="material-symbols-outlined text-[18px]">logout</span>
         </Link>
       </aside>
 
-      {/* Mobile Drawer Navigation */}
+      {/* Mobile Drawer Navigation - Strictly Role-Isolated */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div 
@@ -81,7 +117,9 @@ export default function DashboardLayout({
                 <div className="w-8 h-8 rounded-[8px] bg-surface-container border border-border-base flex items-center justify-center">
                   <span className="font-mono text-sm font-extrabold text-primary">D</span>
                 </div>
-                <span className="micro-label font-bold text-primary">DAEMON_GRID</span>
+                <span className="micro-label font-bold text-primary">
+                  {isOrchestrator ? "ORCHESTRATOR" : "WORKER_NODE"}
+                </span>
               </div>
               <button 
                 onClick={() => setMobileMenuOpen(false)}
@@ -92,40 +130,39 @@ export default function DashboardLayout({
             </div>
 
             <nav className="flex flex-col gap-2 flex-grow">
-              <Link 
-                href="/orchestrator" 
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-xs font-sans font-medium transition-all border ${
-                  isOrchestrator 
-                    ? "bg-primary text-on-primary border-primary font-bold shadow-sm" 
-                    : "text-secondary hover:text-foreground hover:bg-surface-container border-transparent"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">dashboard</span>
-                Orchestrator Console
-              </Link>
-              <Link 
-                href="/worker" 
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-xs font-sans font-medium transition-all border ${
-                  !isOrchestrator 
-                    ? "bg-primary text-on-primary border-primary font-bold shadow-sm" 
-                    : "text-secondary hover:text-foreground hover:bg-surface-container border-transparent"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">public</span>
-                Worker Node Pool
-              </Link>
-              <Link 
-                href="/role-select" 
-                className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-xs font-sans font-medium text-secondary hover:text-foreground hover:bg-surface-container transition-all border border-transparent"
-              >
-                <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-                Switch Role / Gateway
-              </Link>
+              {isOrchestrator ? (
+                <>
+                  <Link 
+                    href="/orchestrator" 
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-xs font-sans font-bold transition-all border bg-primary text-on-primary border-primary shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">dashboard</span>
+                    Orchestrator Console
+                  </Link>
+                  <a 
+                    href="http://localhost:8000/docs" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-xs font-sans font-medium text-secondary hover:text-foreground hover:bg-surface-container transition-all border border-transparent"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">api</span>
+                    FastAPI Documentation
+                  </a>
+                </>
+              ) : (
+                <Link 
+                  href="/worker" 
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-xs font-sans font-bold transition-all border bg-primary text-on-primary border-primary shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[18px]">public</span>
+                  Worker Node Pool
+                </Link>
+              )}
             </nav>
 
             <div className="pt-4 border-t border-border-base flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs px-2 py-1">
-                <span className="text-secondary">Theme</span>
+                <span className="text-secondary font-mono">Color Theme</span>
                 {mounted && (
                   <button 
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -139,19 +176,20 @@ export default function DashboardLayout({
               </div>
               <Link 
                 href="/role-select" 
+                onClick={handleSignOut}
                 className="flex items-center justify-center gap-2 px-3 py-2 rounded-[8px] text-xs micro-label text-error-crimson hover:bg-error-crimson/10 border border-error-crimson/30 transition-all font-bold"
               >
                 <span className="material-symbols-outlined text-[16px]">logout</span>
-                Disconnect
+                {isOrchestrator ? "Sign Out of Master" : "Disconnect Worker"}
               </Link>
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex-grow flex flex-col min-w-0">
-        {/* Top Bar */}
-        <header className="h-14 w-full sticky top-0 z-30 border-b border-border-base bg-surface flex justify-between items-center px-3 sm:px-margin-md transition-all">
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+        {/* Top Header Bar */}
+        <header className="h-14 w-full shrink-0 border-b border-border-base bg-surface flex justify-between items-center px-3 sm:px-margin-md transition-all">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Mobile Nav Trigger */}
             <button 
@@ -166,8 +204,8 @@ export default function DashboardLayout({
             <nav className="flex items-center gap-1.5 sm:gap-2 font-sans text-xs min-w-0">
               <span className="text-secondary font-medium hidden xs:inline shrink-0">Cluster</span>
               <span className="text-border-base hidden xs:inline shrink-0">/</span>
-              <span className="ide-chip text-primary font-semibold border-primary/30 truncate max-w-[130px] sm:max-w-none">
-                {isOrchestrator ? "Orchestrator Console" : "Worker Node"}
+              <span className="ide-chip text-primary font-semibold border-primary/30 truncate max-w-[150px] sm:max-w-none">
+                {isOrchestrator ? "Orchestrator Master Plane" : "Volunteer Worker Pool"}
               </span>
             </nav>
           </div>
@@ -185,16 +223,30 @@ export default function DashboardLayout({
               </button>
             )}
             
-            <div className="ide-chip border-success-emerald/40 text-success-emerald bg-success-emerald/5 shrink-0">
+            {/* Role Chip */}
+            <div className={`ide-chip text-[10px] font-bold shrink-0 ${
+              isOrchestrator 
+                ? "border-primary/50 text-primary bg-primary/5" 
+                : "border-success-emerald/50 text-success-emerald bg-success-emerald/5"
+            }`}>
                <span className="active-dot"></span>
-               <span className="hidden xs:inline">GRID_ONLINE</span>
-               <span className="xs:hidden">LIVE</span>
+               <span>{isOrchestrator ? "MASTER ACTIVE" : "WORKER CONNECTED"}</span>
             </div>
+
+            {/* Quick Exit Button */}
+            <Link 
+              href="/role-select" 
+              onClick={handleSignOut}
+              className="text-secondary hover:text-error-crimson p-1.5 rounded-[6px] hover:bg-surface-container transition-colors hidden sm:inline-flex items-center justify-center"
+              title={isOrchestrator ? "Sign Out of Orchestrator" : "Disconnect Worker"}
+            >
+              <span className="material-symbols-outlined text-[18px]">logout</span>
+            </Link>
           </div>
         </header>
 
-        <main className="flex-grow overflow-y-auto p-3.5 sm:p-5 lg:p-margin-lg custom-scrollbar">
-          <div className="max-w-container-max mx-auto space-y-gutter">
+        <main className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 lg:p-margin-lg custom-scrollbar flex flex-col">
+          <div className="max-w-container-max w-full mx-auto space-y-gutter flex-1 flex flex-col min-h-0">
             {children}
           </div>
         </main>
@@ -204,6 +256,10 @@ export default function DashboardLayout({
             <span className="micro-label text-secondary text-[10px]">Heartbeat: 5s</span>
             <div className="h-3 w-[1px] bg-border-base"></div>
             <span className="micro-label text-secondary text-[10px] hidden sm:inline">Latency: 12ms</span>
+            <div className="h-3 w-[1px] bg-border-base hidden sm:inline"></div>
+            <span className="micro-label text-secondary text-[10px] hidden sm:inline">
+              Mode: {isOrchestrator ? "Orchestrator Control" : "Worker Donor"}
+            </span>
           </div>
           <span className="micro-label text-secondary text-[10px] shrink-0">DaeMon v2.4</span>
         </footer>

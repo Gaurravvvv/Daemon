@@ -213,26 +213,37 @@ DaeMon natively supports heterogeneous clusters containing mixed GPU and CPU har
 
 ---
 
-## 🔬 Supported Workload Types (Polymorphic Engine)
+## Supported Workload Types (Polymorphic Engine)
 
 | Workload Type | Strategy File | Description & Math Operation | Primary Device |
 | :--- | :--- | :--- | :--- |
+| **Structured CSV Cleaning** | `worker/strategies/csv_cleaning.py` | Schema-agnostic tabular data cleaning: streaming row deduplication, sentinel null sanitation, PII regex masking (emails, phones, cards), ISO-8601 date normalization, and master deliverable stitching. | **NVIDIA CUDA (CuPy)** / CPU (NumPy) |
 | **Image Processing** | `worker/strategies/image_processing.py` | 2D Spatial Sobel Convolution ($G = \sqrt{G_x^2 + G_y^2}$) with 1-pixel boundary overlap padding + Contrast Enhancement. | **NVIDIA CUDA (CuPy)** / CPU (NumPy) |
-| **Distributed Math** | `worker/strategies/dummy_math.py` | Distributed block matrix multiplication sub-block dot products ($C_{ij} = \sum A_{im} \cdot B_{mj}$) and Monte Carlo numerical simulations. | **CPU (NumPy / BLAS)** |
-| **Cryptographic Search** | In Development | Parallel SHA-256 pre-image discovery and proof-of-work nonce search over partitioned keyspace sub-intervals with early-termination abort signals. | **CPU / GPU** |
+| **Matrix Multiplication** | `worker/strategies/matrix_strategy.py` | Distributed block matrix multiplication sub-block dot products ($C_{ij} = \sum A_{im} \cdot B_{mj}$) and Monte Carlo numerical simulations. | **CPU (NumPy / BLAS)** / CUDA |
+| **Cryptographic Search** | `worker/strategies/crypto_strategy.py` | Parallel SHA-256 pre-image discovery and proof-of-work nonce search over partitioned keyspace sub-intervals with early-termination abort signals. | **CPU / GPU** |
 
 ---
 
-## ⚡ Quick Start (1-Click Run)
+## Quick Start (1-Click Run)
 
 The fastest way to boot up the entire grid (Docker Infrastructure, FastAPI Orchestrator, and Next.js Dashboard) on Windows:
 
-```bash
-# Double-click or run from PowerShell at the repository root:
-.\start_grid.bat
+```cmd
+# Double-click or run from command line at the repository root:
+start.bat
 ```
 
-> **Note:** The script starts the UI on **Port 5555** to avoid the common Windows Hyper-V port exclusion bug on port 3000. It will automatically launch Google Chrome to `http://localhost:5555`.
+> **Note:** `start.bat` automatically checks and activates the Python virtual environment (`venv`), boots the Docker infrastructure (RabbitMQ, MinIO, Redis, MongoDB), starts the FastAPI Orchestrator on **Port 8000**, and starts the Next.js UI on **Port 5555** (avoiding Hyper-V reserved ports).
+
+### Starting Volunteer Worker Nodes:
+To start a volunteer worker node to process queued tasks:
+
+```cmd
+# Run natively on Windows with direct GPU/CPU access:
+start_worker.bat
+```
+
+You can open multiple terminal windows and run `start_worker.bat` to simulate multiple volunteer worker nodes processing chunks in parallel.
 
 ---
 
@@ -290,67 +301,62 @@ Visit `http://localhost:5555` in your browser.
 
 ---
 
-## 💻 Volunteer Worker Onboarding (Docker & Local)
+## Volunteer Worker Onboarding (Local & Docker)
 
-You can run worker nodes either natively via Python or containerized via Docker.
+You can run worker nodes either natively via Python on your host operating system or containerized via Docker.
 
-### Option A: Containerized via Docker (Recommended for Volunteers)
+### Option A: Running Natively on Host (Recommended for GPU Performance)
+The dedicated launcher automatically activates the virtual environment and leverages your local GPU:
+
+```cmd
+# Windows:
+start_worker.bat
+
+# Manual Python Execution:
+cd worker
+python main.py
+```
+
+### Option B: Containerized via Docker (Universal Run)
+The updated `daemon-worker` image contains all execution strategies and can be launched from any terminal:
 
 #### With NVIDIA GPU Acceleration (CUDA):
 ```bash
-docker run --rm -it --gpus all \
-  -e ORCHESTRATOR_URL="http://host.docker.internal:8000" \
-  -e RABBITMQ_URL="amqp://guest:guest@host.docker.internal:5672/" \
-  -e MINIO_URL="http://host.docker.internal:9090" \
-  -e POOL_ID="public_pool" \
-  daemon-worker
+docker run --rm -it --gpus all --add-host=host.docker.internal:host-gateway -e POOL_ID="public_pool" daemon-worker
 ```
 
 #### In CPU-Only Mode:
 ```bash
-docker run --rm -it \
-  -e ORCHESTRATOR_URL="http://host.docker.internal:8000" \
-  -e RABBITMQ_URL="amqp://guest:guest@host.docker.internal:5672/" \
-  -e MINIO_URL="http://host.docker.internal:9090" \
-  -e POOL_ID="public_pool" \
-  -e FORCE_CPU=1 \
-  daemon-worker
-```
-
-### Option B: Running Natively on Host Python
-```bash
-cd worker
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-# Run worker daemon
-python main.py
+docker run --rm -it --add-host=host.docker.internal:host-gateway -e POOL_ID="public_pool" -e FORCE_CPU=1 daemon-worker
 ```
 
 ---
 
-## 🧪 Generating Test Datasets & Payloads
+## Generating Test Datasets & Payloads
 
 Pre-built dataset generator scripts are located in the repository root:
 
 ```bash
-# 1. Generate 10 sample images and package into payload.zip
+# 1. Generate realistic 50MB dirty CSV benchmark with 150,000 duplicates, PII, and sentinel nulls:
+python generate_dirty_csv.py
+
+# 2. Generate 10 sample images and package into payload.zip:
 python generate_test_images.py
 
-# 2. Generate 10 numerical matrix partitions into math_payload.zip
+# 3. Generate 10 numerical matrix partitions into math_payload.zip:
 python generate_math_payload.py
 
-# 3. Generate 10 SHA-256 keyspace slices into crypto_payload.zip
+# 4. Generate 10 SHA-256 keyspace slices into crypto_payload.zip:
 python generate_crypto_payload.py
 ```
 
 ### Testing a Job via the Dashboard:
 1. Navigate to `http://localhost:5555/orchestrator`.
-2. Click **"Submit New Job"**.
-3. Choose **Job Type** (e.g., `Image Processing`), select **Compute Mode** (`Hybrid`, `GPU Only`, or `CPU Only`), and set **Pool ID** (`public_pool`).
-4. Attach `payload.zip` and click **Submit**.
-5. Watch the real-time progress bar tick up and monitor the live terminal log as workers process chunks!
+2. Click **"Deploy New Job"**.
+3. Choose **Workload Strategy** (e.g. `Structured CSV Dataset Cleaning`), select **Compute Mode** (`Hybrid`, `GPU Accelerated`, or `CPU Only`), and set **Pool ID** (`public_pool`).
+4. Select your dataset file (or drag and drop `sample_dirty_50mb.csv`).
+5. Choose cleaning rules (Drop Duplicate Rows, Sanitize Sentinel Nulls, Scrub PII, Normalize Dates) and set split count.
+6. Click **Deploy to Grid** and start a worker (`start_worker.bat` or Docker) to process the tasks!
 
 ---
 
@@ -389,12 +395,15 @@ python generate_crypto_payload.py
 
 ---
 
-## 📁 Repository File Structure
+## Repository File Structure
 
 ```text
 DaeMon/
 ├── docker-compose.yml              # Multi-container infrastructure definition (RabbitMQ, Redis, Mongo, MinIO)
-├── start_grid.bat                  # Automated 1-click batch startup script for Windows
+├── start.bat                       # Master startup script with automatic venv activation
+├── start_grid.bat                  # Control plane startup script (Docker, FastAPI, Next.js)
+├── start_worker.bat                # Dedicated local volunteer worker node launcher
+├── generate_dirty_csv.py           # Benchmark generator for dirty CSVs with duplicates and PII
 ├── README.md                       # Comprehensive project documentation
 ├── IMPLEMENTATION_PLAN.md          # Phased development master plan
 ├── .gitignore                      # Git exclusion rules
@@ -405,13 +414,15 @@ DaeMon/
 │   ├── api/
 │   │   └── routes.py               # REST endpoints for jobs, worker registry, events, downloads
 │   ├── core/
-│   │   ├── splitter.py             # Domain decomposition task partitioner
+│   │   ├── splitter.py             # General task partitioner
+│   │   ├── csv_splitter.py         # Schema-agnostic streaming CSV partitioner
 │   │   └── aggregator.py           # Background state aggregator and chunk stitching logic
 │   ├── models/
 │   │   └── schemas.py              # Pydantic request and response models
 │   └── services/
 │       ├── database.py             # Async MongoDB client wrapper (motor)
 │       ├── rabbitmq.py             # Pika RabbitMQ connection and publisher
+│       ├── redis_client.py         # Redis client for worker heartbeat leases
 │       └── storage.py              # MinIO S3 client wrapper (boto3)
 │
 ├── worker/                         # Headless Worker Execution Daemon
@@ -421,22 +432,28 @@ DaeMon/
 │   ├── consumer.py                 # AMQP consumer loop, compute mode gating, event dispatch
 │   ├── storage.py                  # MinIO chunk downloader and result uploader
 │   └── strategies/                 # Polymorphic execution strategy plugins
+│       ├── csv_cleaning.py         # Tabular data cleaning: dedup, nulls, PII masking, dates
 │       ├── image_processing.py     # Sobel convolution & contrast enhancement (CuPy GPU / NumPy CPU)
-│       └── dummy_math.py           # Distributed matrix multiplication & math simulations
+│       ├── matrix_strategy.py      # Distributed block matrix multiplication (NumPy/CuPy)
+│       ├── crypto_strategy.py      # Cryptographic SHA-256 pre-image and PoW search
+│       └── dummy_math.py           # Lightweight numerical fallback
 │
-├── dashboard/                      # Next.js 15+ Real-Time Web Telemetry Dashboard
-│   ├── package.json                # Dependencies (Next.js 15, React 19, Tailwind CSS, Lucide icons)
+├── dashboard/                      # Next.js 16+ Real-Time Web Telemetry Dashboard
+│   ├── package.json                # Dependencies (Next.js, React 19, Tailwind CSS)
 │   ├── src/app/
 │   │   ├── layout.tsx              # Root HTML layout and ThemeProvider wrapper
 │   │   ├── globals.css             # Dark terminal design system and animations
 │   │   ├── page.tsx                # Automatic redirect to /role-select
 │   │   ├── role-select/page.tsx    # Multi-role login gateway (Admin vs. Worker)
 │   │   └── (dashboard)/
-│   │       ├── layout.tsx          # Dashboard shell with dynamic header and status badges
+│   │       ├── layout.tsx          # Dashboard shell with bounded viewport layout
 │   │       ├── orchestrator/       # Admin control panel: metrics, active jobs, submit modal
 │   │       │   └── job/[id]/       # Real-time job inspection with live streaming terminal
 │   │       └── worker/             # Volunteer worker dashboard and execution feeds
 │   │           └── job/[id]/       # Worker-specific live task view
+│
+├── tests/                          # Integration and Verification Suites
+│   └── test_csv_cleaning_e2e.py    # End-to-end distributed CSV cleaning test
 │
 ├── generate_test_images.py         # Test generator: 10 images -> payload.zip
 ├── generate_math_payload.py        # Test generator: 10 matrix blocks -> math_payload.zip

@@ -1,15 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function OrchestratorDashboard() {
   const router = useRouter();
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [selectedJobType, setSelectedJobType] = useState("csv_cleaning");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [activeWorkerCount, setActiveWorkerCount] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "processing" | "completed" | "halted">("all");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -40,6 +45,14 @@ export default function OrchestratorDashboard() {
     setIsSubmitting(true);
     
     const formData = new FormData(e.currentTarget);
+    const rules = {
+      deduplicate: formData.get("rule_dedup") === "on",
+      standardize_nulls: formData.get("rule_nulls") === "on",
+      redact_pii: formData.get("rule_pii") === "on",
+      standardize_dates: formData.get("rule_dates") === "on",
+      clean_headers: true
+    };
+    formData.append("rules_json", JSON.stringify(rules));
     
     try {
       const res = await fetch("http://127.0.0.1:8000/api/v1/jobs/upload_and_submit", {
@@ -49,6 +62,7 @@ export default function OrchestratorDashboard() {
       
       const data = await res.json();
       setShowSubmitModal(false);
+      setSelectedFile(null);
       setIsSubmitting(false);
       
       if (data.job_id) {
@@ -77,29 +91,74 @@ export default function OrchestratorDashboard() {
   // Derived KPI metrics
   const processingCount = activeJobs.filter(j => j.status === 'processing').length;
   const completedCount = activeJobs.filter(j => j.status === 'completed').length;
+  const haltedCount = activeJobs.filter(j => j.status === 'halted').length;
   const totalChunks = activeJobs.reduce((acc, curr) => acc + (curr.total_chunks || 10), 0);
+
+  const filteredJobs = activeJobs.filter(job => {
+    if (statusFilter !== "all" && job.status !== statusFilter) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (job.job_name || "").toLowerCase().includes(q) ||
+      (job.job_id || "").toLowerCase().includes(q) ||
+      (job.job_type || "").toLowerCase().includes(q)
+    );
+  });
+
+  const formatStrategyName = (type: string) => {
+    switch ((type || "").toLowerCase()) {
+      case "csv_cleaning":
+      case "csv":
+      case "tabular":
+      case "data_cleaning":
+        return "CSV Cleaning";
+      case "math":
+      case "matrix":
+      case "matrix_multiplication":
+        return "Matrix Compute";
+      case "image":
+      case "image_processing":
+        return "Image Processing";
+      case "crypto":
+      case "cryptography":
+        return "Cryptography";
+      default:
+        return type || "Compute";
+    }
+  };
 
   return (
     <>
       {/* Submit Job Modal Overlay */}
       {showSubmitModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-4">
-          <div className="bg-surface border border-border-base w-full max-w-lg max-h-[92vh] flex flex-col rounded-[16px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="border-b border-border-base px-5 sm:px-6 py-4 flex justify-between items-center bg-surface-container shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[18px]">rocket_launch</span>
-                <h2 className="micro-label font-bold text-primary">Deploy New Compute Task</h2>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4">
+          <div className="bg-surface border border-border-base w-full max-w-xl sm:max-w-2xl max-h-[90vh] flex flex-col rounded-[16px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="border-b border-border-base px-6 py-4 flex justify-between items-center bg-surface-container shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-[8px] bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined text-[18px]">terminal</span>
+                </div>
+                <div>
+                  <h2 className="micro-label font-bold text-foreground">Deploy Compute Workload</h2>
+                  <p className="font-sans text-[11px] text-secondary mt-0.5">Configure task partitioning and dispatch to the worker mesh</p>
+                </div>
               </div>
               <button 
-                onClick={() => setShowSubmitModal(false)} 
-                className="text-secondary hover:text-error-crimson p-1.5 rounded-[6px] hover:bg-surface transition-colors inline-flex items-center justify-center"
+                type="button"
+                onClick={() => {
+                  setShowSubmitModal(false);
+                  setSelectedFile(null);
+                }} 
+                className="text-secondary hover:text-foreground p-1.5 rounded-[6px] hover:bg-surface transition-colors inline-flex items-center justify-center"
                 title="Close Modal"
               >
-                <span className="material-symbols-outlined text-[16px]">close</span>
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
             
             <form onSubmit={handleCreateJob} className="p-5 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto custom-scrollbar flex-1">
+              {/* Job Alias */}
               <div>
                 <label className="micro-label text-secondary block mb-1.5">Job Alias / Identifier</label>
                 <input 
@@ -107,49 +166,147 @@ export default function OrchestratorDashboard() {
                   name="job_name" 
                   type="text" 
                   className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] transition-all placeholder:text-secondary/50" 
-                  placeholder="e.g. distributed_edge_detection_batch_01" 
+                  placeholder="e.g. distributed_data_cleaning_batch_01" 
                 />
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Strategy & Compute Configuration */}
+              <div className="space-y-3">
                 <div>
-                  <label className="micro-label text-secondary block mb-1.5">Strategy Type</label>
-                  <select name="job_type" className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] cursor-pointer">
-                    <option value="math">Math / Compute</option>
-                    <option value="image">Image Processing</option>
-                    <option value="crypto">Cryptography</option>
+                  <label className="micro-label text-secondary block mb-1.5">Workload Strategy</label>
+                  <select 
+                    name="job_type" 
+                    value={selectedJobType}
+                    onChange={(e) => setSelectedJobType(e.target.value)}
+                    className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] cursor-pointer"
+                  >
+                    <option value="csv_cleaning">Structured CSV Dataset Cleaning (Schema-Agnostic)</option>
+                    <option value="math">Distributed Matrix Multiplication</option>
+                    <option value="image">Image Processing and Edge Detection</option>
+                    <option value="crypto">Cryptographic Search and Proof-of-Work</option>
                   </select>
                 </div>
-                <div>
-                  <label className="micro-label text-secondary block mb-1.5">Target Pool</label>
-                  <select name="pool_id" className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] cursor-pointer">
-                    <option value="public_pool">public_pool</option>
-                    <option value="private_cluster_01">private_cluster_01</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="micro-label text-secondary block mb-1.5">Compute Mode</label>
-                  <select name="compute_mode" className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] cursor-pointer">
-                    <option value="any">Any (Hybrid)</option>
-                    <option value="gpu_only">GPU Only</option>
-                    <option value="cpu_only">CPU Only</option>
-                  </select>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="micro-label text-secondary block mb-1.5">Target Worker Pool</label>
+                    <select name="pool_id" className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] cursor-pointer">
+                      <option value="public_pool">Public_pool (Open Compute Grid)</option>
+                      <option value="private_cluster_01">Private_cluster_01 (Dedicated Nodes)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="micro-label text-secondary block mb-1.5">Compute Acceleration Mode</label>
+                    <select name="compute_mode" className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] cursor-pointer">
+                      <option value="any">Any (Hybrid CPU/GPU)</option>
+                      <option value="gpu_only">GPU Accelerated (CUDA)</option>
+                      <option value="cpu_only">CPU Only (NumPy)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
+              {/* Distributed Cleaning Rules (Schema-Agnostic) */}
+              {selectedJobType === "csv_cleaning" && (
+                <div className="p-4 bg-surface-container/60 rounded-[12px] border border-border-base space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="micro-label text-primary font-bold">Distributed Cleaning Rules (Schema-Agnostic)</span>
+                    <span className="text-[10px] font-mono text-secondary px-2 py-0.5 rounded bg-surface border border-border-base">ETL Engine</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <label className="flex items-start gap-2.5 p-2.5 rounded-[8px] bg-surface border border-border-base/70 hover:border-primary/50 transition-colors cursor-pointer group">
+                      <input type="checkbox" name="rule_dedup" defaultChecked className="mt-0.5 accent-primary h-4 w-4 rounded cursor-pointer shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-sans font-medium text-xs text-foreground group-hover:text-primary transition-colors block">Drop Duplicate Rows</span>
+                        <span className="font-sans text-[11px] text-secondary leading-tight block mt-0.5">Streaming hash matching eliminates duplicate records</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 p-2.5 rounded-[8px] bg-surface border border-border-base/70 hover:border-primary/50 transition-colors cursor-pointer group">
+                      <input type="checkbox" name="rule_nulls" defaultChecked className="mt-0.5 accent-primary h-4 w-4 rounded cursor-pointer shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-sans font-medium text-xs text-foreground group-hover:text-primary transition-colors block">Sanitize Sentinel Nulls</span>
+                        <span className="font-sans text-[11px] text-secondary leading-tight block mt-0.5">Standardizes missing, null, and sentinel entries to empty cells</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 p-2.5 rounded-[8px] bg-surface border border-border-base/70 hover:border-primary/50 transition-colors cursor-pointer group">
+                      <input type="checkbox" name="rule_pii" defaultChecked className="mt-0.5 accent-primary h-4 w-4 rounded cursor-pointer shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-sans font-medium text-xs text-foreground group-hover:text-primary transition-colors block">Scrub PII Entities</span>
+                        <span className="font-sans text-[11px] text-secondary leading-tight block mt-0.5">Redacts emails, phone numbers and card identifiers</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 p-2.5 rounded-[8px] bg-surface border border-border-base/70 hover:border-primary/50 transition-colors cursor-pointer group">
+                      <input type="checkbox" name="rule_dates" defaultChecked className="mt-0.5 accent-primary h-4 w-4 rounded cursor-pointer shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-sans font-medium text-xs text-foreground group-hover:text-primary transition-colors block">Normalize Date Formats</span>
+                        <span className="font-sans text-[11px] text-secondary leading-tight block mt-0.5">Standardizes mixed date notations to ISO-8601</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Styled File Upload Dropzone */}
               <div>
-                <label className="micro-label text-secondary block mb-1.5">Payload File (.ZIP dataset)</label>
-                <input 
-                  required 
-                  name="file" 
-                  type="file" 
-                  className="w-full h-10 bg-surface border border-border-base px-3 py-1.5 text-xs font-mono text-foreground file:mr-3 file:py-1 file:px-2.5 file:border file:border-border-base file:rounded-[6px] file:text-[11px] file:font-mono file:bg-surface-container file:text-primary hover:file:border-primary focus:outline-none cursor-pointer rounded-[8px]" 
-                />
+                <label className="micro-label text-secondary block mb-1.5">Payload Dataset (.CSV or .ZIP)</label>
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border border-dashed border-border-base hover:border-primary/60 bg-surface-container/40 hover:bg-surface-container/70 transition-all rounded-[12px] p-4 text-center cursor-pointer group"
+                >
+                  <input 
+                    ref={fileInputRef}
+                    required 
+                    name="file" 
+                    type="file" 
+                    accept=".csv,.zip,.txt"
+                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                    className="hidden" 
+                  />
+                  {selectedFile ? (
+                    <div className="flex items-center justify-between gap-3 px-2">
+                      <div className="flex items-center gap-2.5 text-left min-w-0">
+                        <div className="w-8 h-8 rounded-[8px] bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
+                          <span className="material-symbols-outlined text-[18px]">description</span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-mono text-xs text-foreground font-medium truncate block">
+                            {selectedFile.name}
+                          </span>
+                          <span className="text-[11px] font-mono text-secondary block">
+                            {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                        </div>
+                      </div>
+                      <span className="ide-chip border-primary/40 text-primary text-[10px] shrink-0">
+                        Ready to Upload
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                      <span className="material-symbols-outlined text-[24px] text-secondary group-hover:text-primary transition-colors">
+                        upload_file
+                      </span>
+                      <span className="font-sans text-xs text-foreground group-hover:text-primary transition-colors font-medium">
+                        Click to browse or drag and drop dataset file
+                      </span>
+                      <span className="font-mono text-[10px] text-secondary">
+                        Supported: .csv, .zip, .txt (up to 2 GB)
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Split Count & Password */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="micro-label text-secondary block mb-1.5">Split Count (Partitions)</label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="micro-label text-secondary">Split Count (Partitions)</label>
+                    <span className="text-[10px] font-mono text-secondary">1 - 100</span>
+                  </div>
                   <input 
                     name="split_count" 
                     type="number" 
@@ -164,29 +321,47 @@ export default function OrchestratorDashboard() {
                   <input 
                     name="password" 
                     type="password" 
-                    placeholder="None (Public)" 
+                    placeholder="None (Public Pool)" 
                     className="w-full h-10 bg-surface border border-border-base px-3 text-xs sm:text-sm font-sans text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-[8px] placeholder:text-secondary/50" 
                   />
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-border-base flex items-center justify-end gap-3 shrink-0">
-                <button 
-                  type="button" 
-                  onClick={() => setShowSubmitModal(false)} 
-                  className="px-4 py-2 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[8px] border border-transparent"
-                >
-                  Cancel
-                </button>
-                <button 
-                  disabled={isSubmitting} 
-                  type="submit" 
-                  className="btn-interactive px-5 py-2 text-xs micro-label bg-primary text-on-primary font-bold rounded-[8px] border border-primary flex items-center gap-2 shadow-sm"
-                >
-                  {isSubmitting ? (
-                    <>Deploying <span className="material-symbols-outlined text-[14px] animate-spin">sync</span></>
-                  ) : "Deploy to Grid"}
-                </button>
+              {/* Footer */}
+              <div className="pt-3 border-t border-border-base flex items-center justify-between gap-3 shrink-0">
+                <div className="text-[11px] font-mono text-secondary hidden sm:flex items-center gap-1.5">
+                  <span className="active-dot"></span>
+                  Grid Ready
+                </div>
+                <div className="flex items-center gap-3 ml-auto">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowSubmitModal(false);
+                      setSelectedFile(null);
+                    }} 
+                    className="px-4 py-2 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[8px] border border-transparent"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    disabled={isSubmitting} 
+                    type="submit" 
+                    className="btn-interactive px-5 py-2 text-xs micro-label bg-primary text-on-primary font-bold rounded-[8px] border border-primary flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <span>Deploying</span>
+                        <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[15px]">send</span>
+                        <span>Deploy to Grid</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -210,32 +385,44 @@ export default function OrchestratorDashboard() {
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[96px]">
-          <span className="micro-label text-secondary">Active Processing</span>
+        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[100px]">
+          <div className="flex items-center justify-between">
+            <span className="micro-label text-secondary">Active Processing</span>
+            <span className="material-symbols-outlined text-[18px] text-primary">hourglass_top</span>
+          </div>
           <div className="mt-2 flex items-baseline justify-between gap-2">
             <span className="kpi-numeral text-2xl sm:text-3xl text-primary">{processingCount}</span>
             <span className="ide-chip border-success-emerald/30 text-success-emerald text-[10px] shrink-0">RUNNING</span>
           </div>
         </div>
 
-        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[96px]">
-          <span className="micro-label text-secondary">Completed Jobs</span>
+        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[100px]">
+          <div className="flex items-center justify-between">
+            <span className="micro-label text-secondary">Completed Jobs</span>
+            <span className="material-symbols-outlined text-[18px] text-foreground/70">task_alt</span>
+          </div>
           <div className="mt-2 flex items-baseline justify-between gap-2">
             <span className="kpi-numeral text-2xl sm:text-3xl text-foreground">{completedCount}</span>
             <span className="ide-chip border-border-base text-secondary text-[10px] shrink-0">HISTORICAL</span>
           </div>
         </div>
 
-        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[96px]">
-          <span className="micro-label text-secondary">Total Task Chunks</span>
+        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[100px]">
+          <div className="flex items-center justify-between">
+            <span className="micro-label text-secondary">Total Task Chunks</span>
+            <span className="material-symbols-outlined text-[18px] text-secondary">splitscreen</span>
+          </div>
           <div className="mt-2 flex items-baseline justify-between gap-2">
             <span className="kpi-numeral text-2xl sm:text-3xl text-secondary">{totalChunks}</span>
             <span className="ide-chip border-border-base text-secondary text-[10px] shrink-0">PARTITIONS</span>
           </div>
         </div>
 
-        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[96px]">
-          <span className="micro-label text-secondary">Active Nodes / Queue</span>
+        <div className="card-interactive bg-surface border border-border-base rounded-[12px] p-4 flex flex-col justify-between min-h-[100px]">
+          <div className="flex items-center justify-between">
+            <span className="micro-label text-secondary">Active Nodes / Queue</span>
+            <span className="material-symbols-outlined text-[18px] text-success-emerald">hub</span>
+          </div>
           <div className="mt-2 flex items-baseline justify-between gap-2">
             <span className="kpi-numeral text-xl sm:text-2xl text-success-emerald truncate">
               {activeWorkerCount} {activeWorkerCount === 1 ? 'Node' : 'Nodes'}
@@ -248,24 +435,86 @@ export default function OrchestratorDashboard() {
         </div>
       </div>
 
-      {/* Main Jobs Table */}
+      {/* Main Jobs Table with Filter Toolbar */}
       <section className="bg-surface border border-border-base rounded-[16px] overflow-hidden shadow-sm">
-        <div className="px-4 sm:px-margin-md py-3.5 border-b border-border-base bg-surface-container flex justify-between items-center gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="material-symbols-outlined text-secondary text-[16px] shrink-0">list_alt</span>
-            <h2 className="micro-label font-bold text-foreground truncate">Dispatched Cluster Tasks</h2>
+        {/* Table Toolbar */}
+        <div className="px-4 sm:px-margin-md py-3 border-b border-border-base bg-surface-container flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          {/* Status Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setStatusFilter("all")}
+              className={`px-2.5 py-1 text-[11px] font-mono rounded-[6px] transition-all border ${
+                statusFilter === "all"
+                  ? "bg-primary text-on-primary font-bold border-primary shadow-xs"
+                  : "bg-surface text-secondary hover:text-foreground border-border-base"
+              }`}
+            >
+              All ({activeJobs.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter("processing")}
+              className={`px-2.5 py-1 text-[11px] font-mono rounded-[6px] transition-all border ${
+                statusFilter === "processing"
+                  ? "bg-primary text-on-primary font-bold border-primary shadow-xs"
+                  : "bg-surface text-secondary hover:text-foreground border-border-base"
+              }`}
+            >
+              Processing ({processingCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("completed")}
+              className={`px-2.5 py-1 text-[11px] font-mono rounded-[6px] transition-all border ${
+                statusFilter === "completed"
+                  ? "bg-primary text-on-primary font-bold border-primary shadow-xs"
+                  : "bg-surface text-secondary hover:text-foreground border-border-base"
+              }`}
+            >
+              Completed ({completedCount})
+            </button>
+            {haltedCount > 0 && (
+              <button
+                onClick={() => setStatusFilter("halted")}
+                className={`px-2.5 py-1 text-[11px] font-mono rounded-[6px] transition-all border ${
+                  statusFilter === "halted"
+                    ? "bg-primary text-on-primary font-bold border-primary shadow-xs"
+                    : "bg-surface text-secondary hover:text-foreground border-border-base"
+                }`}
+              >
+                Halted ({haltedCount})
+              </button>
+            )}
           </div>
-          <span className="micro-label text-secondary text-[10px] shrink-0">
-            {activeJobs.length} {activeJobs.length === 1 ? 'Job' : 'Jobs'} Recorded
-          </span>
+
+          {/* Search Box */}
+          <div className="relative w-full md:w-64 shrink-0">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary text-[16px] pointer-events-none">
+              search
+            </span>
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search alias, ID, strategy..."
+              className="w-full h-8 bg-surface border border-border-base rounded-[6px] pl-8 pr-7 text-xs font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-secondary/50"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary hover:text-foreground"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            )}
+          </div>
         </div>
         
+        {/* Table Body */}
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-bg-subtle text-[11px] font-mono text-secondary uppercase tracking-[0.4px] border-b border-border-base">
                 <th className="px-4 sm:px-margin-md py-3 font-semibold whitespace-nowrap">Job ID</th>
-                <th className="px-4 sm:px-margin-md py-3 font-semibold min-w-[140px]">Alias</th>
+                <th className="px-4 sm:px-margin-md py-3 font-semibold min-w-[150px]">Alias</th>
                 <th className="px-4 sm:px-margin-md py-3 font-semibold whitespace-nowrap">Strategy</th>
                 <th className="px-4 sm:px-margin-md py-3 font-semibold whitespace-nowrap">Status</th>
                 <th className="px-4 sm:px-margin-md py-3 font-semibold min-w-[180px]">Cluster Progress</th>
@@ -273,15 +522,39 @@ export default function OrchestratorDashboard() {
               </tr>
             </thead>
             <tbody className="text-sm font-sans">
-              {activeJobs.length === 0 ? (
+              {filteredJobs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 sm:px-margin-md py-12 text-center text-secondary font-mono text-xs">
                     <span className="material-symbols-outlined text-3xl mb-2 text-secondary/40 block">inbox</span>
-                    No active jobs in the queue. Deploy a new job above to begin compute.
+                    {activeJobs.length === 0 ? (
+                      <div className="space-y-3">
+                        <p>No active jobs in the queue. Deploy a new job above to begin compute.</p>
+                        <button
+                          onClick={() => setShowSubmitModal(true)}
+                          className="btn-interactive px-3.5 py-1.5 text-xs micro-label bg-primary text-on-primary font-bold rounded-[6px] border border-primary inline-flex items-center gap-1.5 shadow-sm"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                          Deploy First Job
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p>No jobs found matching the current search and status filters.</p>
+                        <button
+                          onClick={() => {
+                            setSearchQuery("");
+                            setStatusFilter("all");
+                          }}
+                          className="text-primary hover:underline font-sans text-xs"
+                        >
+                          Reset Filters
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (
-                activeJobs.map((job) => (
+                filteredJobs.map((job) => (
                   <tr 
                     key={job.job_id} 
                     onClick={() => router.push(`/orchestrator/job/${job.job_id}`)}
@@ -292,14 +565,19 @@ export default function OrchestratorDashboard() {
                         #{job.job_id.substring(0, 10)}
                       </span>
                     </td>
-                    <td className="px-4 sm:px-margin-md py-3.5 font-semibold text-foreground">{job.job_name}</td>
+                    <td className="px-4 sm:px-margin-md py-3.5 font-semibold text-foreground max-w-[220px] truncate" title={job.job_name}>{job.job_name}</td>
                     <td className="px-4 sm:px-margin-md py-3.5 whitespace-nowrap">
-                      <span className="ide-chip uppercase text-[10px]">
-                        {job.job_type}
+                      <span className="ide-chip text-[10px] font-sans font-medium">
+                        {formatStrategyName(job.job_type)}
                       </span>
                     </td>
                     <td className="px-4 sm:px-margin-md py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 font-mono text-xs ${job.status === 'processing' ? 'text-success-emerald' : 'text-secondary'}`}>
+                      <span className={`inline-flex items-center gap-1.5 font-mono text-xs ${
+                        job.status === 'processing' ? 'text-success-emerald font-semibold' :
+                        job.status === 'completed' ? 'text-primary' :
+                        job.status === 'halted' ? 'text-error-crimson' :
+                        'text-secondary'
+                      }`}>
                         <span className={job.status === 'processing' ? 'active-dot' : 'w-1.5 h-1.5 rounded-full bg-border-base'}></span> 
                         {job.status.toUpperCase()}
                       </span>
@@ -308,7 +586,11 @@ export default function OrchestratorDashboard() {
                       <div className="flex items-center gap-3">
                         <div className="flex-grow bg-surface-container rounded-full h-2 relative overflow-hidden border border-border-base/50 min-w-[80px]">
                           <div 
-                            className={`rounded-full h-full transition-all duration-500 ${job.status === 'processing' ? 'bg-success-emerald' : 'bg-primary/50'}`} 
+                            className={`rounded-full h-full transition-all duration-500 ${
+                              job.status === 'processing' ? 'bg-success-emerald' : 
+                              job.status === 'completed' ? 'bg-primary' :
+                              'bg-primary/50'
+                            }`} 
                             style={{ width: `${job.progress || 0}%` }}
                           ></div>
                         </div>
@@ -316,19 +598,17 @@ export default function OrchestratorDashboard() {
                       </div>
                     </td>
                     <td className="px-4 sm:px-margin-md py-3.5 text-right whitespace-nowrap">
-                      <div className="flex justify-end gap-2">
-                        {(job.status === 'completed' || job.status === 'halted') && (
-                          <button 
-                            onClick={(e) => handleDeleteJob(job.job_id, e)}
-                            className="px-2.5 py-1 text-[11px] font-mono border border-error-crimson/40 hover:bg-error-crimson hover:text-white text-error-crimson transition-all rounded-[6px] inline-flex items-center justify-center"
-                            title="Delete Job"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">delete</span>
-                          </button>
-                        )}
+                      <div className="flex justify-end items-center gap-2">
+                        <button 
+                          onClick={(e) => handleDeleteJob(job.job_id, e)}
+                          className="px-2 py-1 text-[11px] font-mono border border-error-crimson/30 hover:bg-error-crimson/15 text-error-crimson transition-all rounded-[6px] inline-flex items-center justify-center"
+                          title="Delete Job"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">delete</span>
+                        </button>
                         <Link 
                           href={`/orchestrator/job/${job.job_id}`} 
-                          className="btn-interactive px-3 py-1 inline-flex items-center justify-center text-[11px] micro-label border border-border-base hover:border-primary text-secondary hover:text-primary transition-all rounded-[6px] bg-surface-container"
+                          className="btn-interactive px-3 py-1 inline-flex items-center justify-center text-[11px] micro-label border border-border-base hover:border-primary text-secondary hover:text-primary transition-all rounded-[6px] bg-surface-container font-semibold"
                         >
                           Inspect
                         </Link>

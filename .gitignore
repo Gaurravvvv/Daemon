@@ -45,15 +45,27 @@ build/
 *.tsbuildinfo
 
 # Test Datasets & Generated Payloads
+datasets/
+*.csv
 test_data_math/
 test_data_crypto/
 math_payload.zip
 crypto_payload.zip
 *_payload.zip
+*.zip
 
 # Temporary Runtime / Worker Storage
 temp/
 tmp/
 daemon_worker/
+*_in.csv
+*_clean.csv
+*_audit.json
+test_upload.csv
 D:/Daemon_Minio_Data/
 survey paper/
+
+# Testing and Coverage
+.pytest_cache/
+.coverage
+htmlcov/

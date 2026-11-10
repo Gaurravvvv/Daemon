@@ -10,6 +10,7 @@ from strategies.dummy_math import DummyMathStrategy
 from strategies.image_processing import ImageProcessingStrategy
 from strategies.matrix_strategy import MatrixMultiplicationStrategy
 from strategies.crypto_strategy import CryptoSearchStrategy
+from strategies.csv_cleaning import CSVCleaningStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,9 @@ class TaskConsumer:
             start_time = time.time()
             clean_type = str(job_type).lower().strip()
             
-            if clean_type in ("image", "image_processing"):
+            if clean_type in ("csv", "csv_cleaning", "tabular", "data_cleaning"):
+                result = CSVCleaningStrategy.execute(task_payload)
+            elif clean_type in ("image", "image_processing"):
                 result = ImageProcessingStrategy.execute(task_payload)
             elif clean_type in ("math", "matrix", "matrix_multiplication"):
                 result = MatrixMultiplicationStrategy.execute(task_payload)
@@ -166,13 +169,21 @@ class TaskConsumer:
                     progress_data = resp.json()
                     new_progress = progress_data.get('progress', '?')
                     logger.info(f"Progress updated for job {job_id}: {new_progress}%")
-                    self._emit(job_id, "SUCCESS", f"{self.worker_id} completed chunk {chunk_index + 1}/{total_chunks} [{actual_device}] in {elapsed}s — progress: {new_progress}%")
+                    
+                    if clean_type in ("csv", "csv_cleaning", "tabular", "data_cleaning"):
+                        retained = result.get("retained_rows", "?")
+                        dups = result.get("duplicates_removed", 0)
+                        pii = result.get("pii_masked", 0)
+                        thr = result.get("throughput", 0)
+                        self._emit(job_id, "SUCCESS", f"{self.worker_id} cleaned chunk {chunk_index + 1}/{total_chunks}: {retained} rows retained ({dups} dups dropped, {pii} PII scrubbed) at {thr} rows/s in {elapsed}s — progress: {new_progress}%")
+                    else:
+                        self._emit(job_id, "SUCCESS", f"{self.worker_id} completed chunk {chunk_index + 1}/{total_chunks} [{actual_device}] in {elapsed}s — progress: {new_progress}%")
                 else:
                     logger.warning(f"Orchestrator returned {resp.status_code} for progress update")
-                    self._emit(job_id, "SUCCESS", f"{self.worker_id} completed chunk {chunk_index + 1}/{total_chunks} [{actual_device}] in {elapsed}s")
+                    self._emit(job_id, "SUCCESS", f"{self.worker_id} completed chunk {chunk_index + 1}/{total_chunks} in {elapsed}s")
             except requests.exceptions.RequestException as ping_err:
                 logger.error(f"Failed to ping orchestrator for progress: {ping_err}")
-                self._emit(job_id, "SUCCESS", f"{self.worker_id} completed chunk {chunk_index + 1}/{total_chunks} [{actual_device}] in {elapsed}s")
+                self._emit(job_id, "SUCCESS", f"{self.worker_id} completed chunk {chunk_index + 1}/{total_chunks} in {elapsed}s")
                 
             logger.info(f"Task {task_id} fully complete.")
             

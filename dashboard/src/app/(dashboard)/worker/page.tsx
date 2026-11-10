@@ -30,6 +30,25 @@ export default function WorkerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  const formatStrategyName = (type: string) => {
+    switch ((type || "").toLowerCase()) {
+      case "csv_cleaning":
+      case "csv":
+      case "tabular":
+      case "data_cleaning":
+        return "CSV Dataset Cleaning";
+      case "math":
+      case "matrix":
+        return "Matrix Compute";
+      case "image":
+        return "Image Processing";
+      case "crypto":
+        return "Cryptography";
+      default:
+        return type || "Compute";
+    }
+  };
+
   const filteredJobs = jobs.filter(job => {
     if (job?.status !== "processing") return false;
 
@@ -43,7 +62,8 @@ export default function WorkerDashboard() {
 
     const nameMatch = (job?.job_name?.toLowerCase() || "").includes(searchQuery.toLowerCase());
     const idMatch = (job?.job_id?.toLowerCase() || "").includes(searchQuery.toLowerCase());
-    return nameMatch || idMatch;
+    const typeMatch = (job?.job_type?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+    return nameMatch || idMatch || typeMatch;
   });
 
   const handleJobClick = (job: any) => {
@@ -86,23 +106,29 @@ export default function WorkerDashboard() {
     <>
       {/* Password Modal */}
       {selectedJob && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4">
           <div className="bg-surface border border-border-base w-full max-w-sm max-h-[92vh] flex flex-col rounded-[16px] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="border-b border-border-base px-5 sm:px-6 py-4 flex justify-between items-center bg-surface-container shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-primary">lock</span>
-                <h2 className="micro-label font-bold text-primary">Protected Task Access</h2>
+            <div className="border-b border-border-base px-5 py-4 flex justify-between items-center bg-surface-container shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-[8px] bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined text-[18px]">lock</span>
+                </div>
+                <div>
+                  <h2 className="micro-label font-bold text-foreground">Protected Cluster Task</h2>
+                  <p className="font-sans text-[11px] text-secondary">Passkey required to join</p>
+                </div>
               </div>
               <button 
+                type="button"
                 onClick={() => setSelectedJob(null)} 
-                className="text-secondary hover:text-error-crimson p-1.5 rounded-[6px] hover:bg-surface transition-colors inline-flex items-center justify-center"
+                className="text-secondary hover:text-foreground p-1.5 rounded-[6px] hover:bg-surface transition-colors inline-flex items-center justify-center"
                 title="Close"
               >
                 <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
             
-            <form onSubmit={handleVerifyPassword} className="p-5 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+            <form onSubmit={handleVerifyPassword} className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div>
                 <label className="micro-label text-secondary block mb-1.5">Cluster Passkey</label>
                 <input 
@@ -119,18 +145,18 @@ export default function WorkerDashboard() {
                 )}
               </div>
               
-              <div className="pt-3 border-t border-border-base flex justify-end gap-3 shrink-0">
+              <div className="pt-3 border-t border-border-base flex justify-end gap-2.5 shrink-0">
                 <button 
                   type="button" 
                   onClick={() => setSelectedJob(null)} 
-                  className="h-9 px-4 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[8px] inline-flex items-center justify-center"
+                  className="px-3.5 py-1.5 text-xs micro-label text-secondary hover:text-foreground hover:bg-surface-container transition-all rounded-[6px]"
                 >
                   Cancel
                 </button>
                 <button 
                   disabled={isVerifying} 
                   type="submit" 
-                  className="btn-interactive h-9 px-5 text-xs micro-label bg-primary text-on-primary font-bold rounded-[8px] border border-primary inline-flex items-center justify-center gap-2 transition-all shadow-sm"
+                  className="btn-interactive px-4 py-1.5 text-xs micro-label bg-primary text-on-primary font-bold rounded-[6px] border border-primary inline-flex items-center justify-center gap-1.5 transition-all shadow-sm"
                 >
                   {isVerifying ? "Verifying..." : "Authenticate"}
                 </button>
@@ -141,7 +167,7 @@ export default function WorkerDashboard() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-3 sm:gap-4 mb-2">
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-bold title-tight text-primary">
             {poolFilter === "public" ? "Global Compute Pool" : "Private Cluster Gateway"}
@@ -154,19 +180,27 @@ export default function WorkerDashboard() {
         </div>
         
         <div className="relative w-full md:w-80 shrink-0">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[18px] pointer-events-none">search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[16px] pointer-events-none">search</span>
           <input 
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 bg-surface border border-border-base rounded-[8px] pl-9.5 pr-3 text-xs sm:text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-secondary/50" 
+            className="w-full h-10 bg-surface border border-border-base rounded-[8px] pl-9 pr-8 text-xs sm:text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-secondary/50" 
             placeholder="Search Job ID or Alias..." 
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Pool Switcher Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border-base">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-border-base">
         <div className="flex items-center gap-1.5 bg-surface-container p-1 rounded-[10px] border border-border-base">
           <button
             onClick={() => setPoolFilter("public")}
@@ -244,16 +278,24 @@ export default function WorkerDashboard() {
                 </div>
               </div>
               
-              <h3 className="font-sans font-bold text-base mb-1.5 text-foreground group-hover:text-primary transition-colors line-clamp-1">
+              <h3 className="font-sans font-bold text-base mb-1 text-foreground group-hover:text-primary transition-colors line-clamp-1">
                 {job.job_name}
               </h3>
-              <div className="mb-5 sm:mb-6">
-                <span className="ide-chip text-[10px] uppercase text-secondary">
-                  {job.job_type}
+              <div className="mb-4">
+                <span className="ide-chip text-[10px] text-secondary">
+                  {formatStrategyName(job.job_type)}
                 </span>
               </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-surface-container rounded-full h-1.5 overflow-hidden border border-border-base/40 mb-4">
+                <div 
+                  className="bg-success-emerald h-full rounded-full transition-all duration-300" 
+                  style={{ width: `${job.progress || 0}%` }}
+                ></div>
+              </div>
               
-              <div className="mt-auto pt-3.5 border-t border-border-base/70 flex flex-wrap justify-between items-center gap-2 text-xs font-mono text-secondary">
+              <div className="mt-auto pt-3 border-t border-border-base/70 flex flex-wrap justify-between items-center gap-2 text-xs font-mono text-secondary">
                 <div className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[15px] text-primary">data_usage</span>
                   <span>{job.progress || 0}% Complete</span>
